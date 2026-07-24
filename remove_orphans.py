@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from rptsched_cleanup.orphans import find_orphan_groups
+from rptsched_cleanup.quarantine import make_run_dir, move_groups_to_quarantine
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,9 +27,16 @@ def main(argv=None) -> int:
     groups = find_orphan_groups(args.data_dir)
     total_files = sum(len(filenames) for filenames in groups.values())
 
-    print("DRY RUN: {} orphan id(s), {} file(s) would be moved".format(len(groups), total_files))
-    for file_id in sorted(groups):
-        print("  {}: {}".format(file_id, ", ".join(sorted(groups[file_id]))))
+    if not args.execute:
+        print("DRY RUN: {} orphan id(s), {} file(s) would be moved".format(len(groups), total_files))
+        for file_id in sorted(groups):
+            print("  {}: {}".format(file_id, ", ".join(sorted(groups[file_id]))))
+        return 0
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = make_run_dir(args.quarantine_dir, "orphans", timestamp)
+    move_groups_to_quarantine(args.data_dir, run_dir, groups, moved_at=timestamp)
+    print("Moved {} file(s) across {} orphan id(s) into {}".format(total_files, len(groups), run_dir))
     return 0
 
 
