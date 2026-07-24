@@ -68,5 +68,37 @@ class TestExecute(unittest.TestCase):
             self.assertEqual(len(rows), 2)
 
 
+class TestRestore(unittest.TestCase):
+    def test_restore_moves_files_back(self):
+        with TemporaryDirectory() as tmp:
+            schedlist_lines = [
+                "abcd|noverdue|Known Template|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
+            ]
+            data_dir = make_data_dir(tmp, schedlist_lines, ["abcd.set", "wxyz.set", "wxyz.user"])
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with redirect_stdout(io.StringIO()):
+                remove_orphans.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--execute",
+                ])
+
+            run_dir = list(quarantine_dir.glob("orphans_*"))[0]
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = remove_orphans.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue((data_dir / "wxyz.set").is_file())
+            self.assertTrue((data_dir / "wxyz.user").is_file())
+            self.assertIn("restored", out.getvalue().lower())
+
+
 if __name__ == "__main__":
     unittest.main()

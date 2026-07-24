@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from rptsched_cleanup.orphans import find_orphan_groups
-from rptsched_cleanup.quarantine import make_run_dir, move_groups_to_quarantine
+from rptsched_cleanup.quarantine import make_run_dir, move_groups_to_quarantine, restore_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.restore:
+        result = restore_run(args.restore)
+        print("Restored {} file(s), skipped {} already-restored".format(result["restored"], result["skipped"]))
+        return 0
 
     groups = find_orphan_groups(args.data_dir)
     total_files = sum(len(filenames) for filenames in groups.values())
