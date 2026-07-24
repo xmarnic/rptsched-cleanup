@@ -5,7 +5,13 @@ from datetime import datetime
 from pathlib import Path
 
 from rptsched_cleanup.orphans import find_orphan_groups
-from rptsched_cleanup.quarantine import make_run_dir, move_groups_to_quarantine, restore_run
+from rptsched_cleanup.quarantine import (
+    QuarantineMoveError,
+    QuarantineRestoreError,
+    make_run_dir,
+    move_groups_to_quarantine,
+    restore_run,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,7 +31,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.restore:
-        result = restore_run(args.restore)
+        try:
+            result = restore_run(args.restore)
+        except QuarantineRestoreError as err:
+            print(str(err), file=sys.stderr)
+            return 1
         print("Restored {} file(s), skipped {} already-restored".format(result["restored"], result["skipped"]))
         return 0
 
@@ -40,7 +50,11 @@ def main(argv=None) -> int:
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = make_run_dir(args.quarantine_dir, "orphans", timestamp)
-    move_groups_to_quarantine(args.data_dir, run_dir, groups, moved_at=timestamp)
+    try:
+        move_groups_to_quarantine(args.data_dir, run_dir, groups, moved_at=timestamp)
+    except QuarantineMoveError as err:
+        print(str(err), file=sys.stderr)
+        return 1
     print("Moved {} file(s) across {} orphan id(s) into {}".format(total_files, len(groups), run_dir))
     return 0
 

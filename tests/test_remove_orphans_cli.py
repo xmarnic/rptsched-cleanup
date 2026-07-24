@@ -1,6 +1,6 @@
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -98,6 +98,38 @@ class TestRestore(unittest.TestCase):
             self.assertTrue((data_dir / "wxyz.set").is_file())
             self.assertTrue((data_dir / "wxyz.user").is_file())
             self.assertIn("restored", out.getvalue().lower())
+
+    def test_restore_conflict_prints_error_and_exits_nonzero(self):
+        with TemporaryDirectory() as tmp:
+            schedlist_lines = [
+                "abcd|noverdue|Known Template|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
+            ]
+            data_dir = make_data_dir(tmp, schedlist_lines, ["abcd.set", "wxyz.set", "wxyz.user"])
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with redirect_stdout(io.StringIO()):
+                remove_orphans.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--execute",
+                ])
+
+            run_dir = list(quarantine_dir.glob("orphans_*"))[0]
+
+            # Recreate a file at its original location so restore hits a conflict.
+            (data_dir / "wxyz.set").write_text("conflicting content")
+
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                exit_code = remove_orphans.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("wxyz.set", err.getvalue())
+            self.assertIn("already exists", err.getvalue())
 
 
 if __name__ == "__main__":
