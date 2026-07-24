@@ -1,3 +1,4 @@
+import csv
 import os
 import shutil
 import tempfile
@@ -93,3 +94,45 @@ def rewrite_operator(data_dir, template_id, new_value):
         raise MissingOperatorLineError("No operator line found in {}".format(set_path))
 
     _atomic_write(set_path, lines)
+
+
+MANIFEST_FIELDS = ["id", "old_operator", "new_operator"]
+MANIFEST_FILENAME = "manifest.csv"
+
+
+class OperatorRewriteError(RuntimeError):
+    pass
+
+
+def write_operator_manifest(run_dir, rows):
+    manifest_path = Path(run_dir) / MANIFEST_FILENAME
+    with manifest_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+    return manifest_path
+
+
+def read_operator_manifest(run_dir):
+    manifest_path = Path(run_dir) / MANIFEST_FILENAME
+    with manifest_path.open("r", newline="") as f:
+        reader = csv.DictReader(f)
+        return [dict(row) for row in reader]
+
+
+def apply_mismatches(data_dir, run_dir, mismatches):
+    rows = []
+    try:
+        for template_id in sorted(mismatches):
+            m = mismatches[template_id]
+            rewrite_operator(data_dir, template_id, m.new_operator)
+            rows.append({"id": m.id, "old_operator": m.old_operator, "new_operator": m.new_operator})
+    except OSError as err:
+        write_operator_manifest(run_dir, rows)
+        raise OperatorRewriteError(
+            "Failed to rewrite operator field; {} id(s) corrected before the failure: {}".format(len(rows), err)
+        ) from err
+
+    write_operator_manifest(run_dir, rows)
+    return rows

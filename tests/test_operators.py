@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from rptsched_cleanup.operators import (
     find_operator_mismatches,
@@ -9,7 +10,13 @@ from rptsched_cleanup.operators import (
     read_operator,
     rewrite_operator,
     MissingOperatorLineError,
+    write_operator_manifest,
+    read_operator_manifest,
+    apply_mismatches,
+    OperatorRewriteError,
+    MANIFEST_FIELDS,
 )
+from rptsched_cleanup.quarantine import make_run_dir
 from tests.fixtures import make_data_dir
 
 
@@ -159,6 +166,65 @@ class TestRewriteOperator(unittest.TestCase):
 
             with self.assertRaises(MissingOperatorLineError):
                 rewrite_operator(data_dir, "abcd", "NEWVALUE")
+
+
+class TestManifestRoundTrip(unittest.TestCase):
+    def test_write_then_read_round_trips_rows(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+            rows = [{"id": "abcd", "old_operator": "OLD", "new_operator": "NEW"}]
+
+            manifest_path = write_operator_manifest(run_dir, rows)
+
+            self.assertEqual(manifest_path, run_dir / "manifest.csv")
+            self.assertEqual(read_operator_manifest(run_dir), rows)
+
+    def test_manifest_fields_order(self):
+        self.assertEqual(MANIFEST_FIELDS, ["id", "old_operator", "new_operator"])
+
+
+class TestApplyMismatches(unittest.TestCase):
+    def test_rewrites_all_and_writes_manifest(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "data"
+            data_dir.mkdir()
+            _write_set_file(data_dir, "aaaa", "OLDA")
+            _write_set_file(data_dir, "bbbb", "OLDB")
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+
+            mismatches = {
+                "aaaa": OperatorMismatch("aaaa", "OLDA", "NEWA"),
+                "bbbb": OperatorMismatch("bbbb", "OLDB", "NEWB"),
+            }
+
+            rows = apply_mismatches(data_dir, run_dir, mismatches)
+
+            self.assertEqual(read_operator(data_dir, "aaaa"), "NEWA")
+            self.assertEqual(read_operator(data_dir, "bbbb"), "NEWB")
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(read_operator_manifest(run_dir), rows)
+
+    def test_aborts_and_writes_partial_manifest_on_failure(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "data"
+            data_dir.mkdir()
+            _write_set_file(data_dir, "aaaa", "OLDA")
+            _write_set_file(data_dir, "bbbb", "OLDB")
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+
+            mismatches = {
+                "aaaa": OperatorMismatch("aaaa", "OLDA", "NEWA"),
+                "bbbb": OperatorMismatch("bbbb", "OLDB", "NEWB"),
+            }
+
+            with patch("rptsched_cleanup.operators.os.replace", side_effect=OSError("simulated failure")):
+                with self.assertRaises(OperatorRewriteError):
+                    apply_mismatches(data_dir, run_dir, mismatches)
+
+            # manifest reflects zero completed rewrites (aaaa sorts first and fails immediately)
+            self.assertEqual(read_operator_manifest(run_dir), [])
+            # original files untouched (atomic write failed before replace)
+            self.assertEqual(read_operator(data_dir, "aaaa"), "OLDA")
 
 
 if __name__ == "__main__":
