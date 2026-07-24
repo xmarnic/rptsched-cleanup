@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine, QuarantineMoveError
+from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine, QuarantineMoveError, restore_run, QuarantineRestoreError
 
 
 class TestMakeRunDir(unittest.TestCase):
@@ -121,6 +121,54 @@ class TestMoveGroupsAbortOnFailure(unittest.TestCase):
             rows = read_manifest(run_dir)
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["filename"], "abcd.set")
+
+
+class TestRestoreRun(unittest.TestCase):
+    def _setup_run(self, tmp):
+        data_dir = Path(tmp) / "data"
+        data_dir.mkdir()
+        (data_dir / "abcd.set").write_text("set content")
+        (data_dir / "efgh.set").write_text("other set content")
+
+        run_dir = make_run_dir(Path(tmp) / "quarantine", "orphans", "20260724_090000")
+        groups = {"abcd": ["abcd.set"], "efgh": ["efgh.set"]}
+        move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
+        return data_dir, run_dir
+
+    def test_restores_all_files(self):
+        with TemporaryDirectory() as tmp:
+            data_dir, run_dir = self._setup_run(tmp)
+
+            result = restore_run(run_dir)
+
+            self.assertEqual(result, {"restored": 2, "skipped": 0})
+            self.assertTrue((data_dir / "abcd.set").is_file())
+            self.assertTrue((data_dir / "efgh.set").is_file())
+            self.assertFalse((run_dir / "abcd.set").exists())
+            self.assertFalse((run_dir / "efgh.set").exists())
+            # manifest is never deleted
+            self.assertTrue((run_dir / "manifest.csv").is_file())
+
+    def test_second_restore_is_idempotent_no_op(self):
+        with TemporaryDirectory() as tmp:
+            data_dir, run_dir = self._setup_run(tmp)
+            restore_run(run_dir)
+
+            result = restore_run(run_dir)
+
+            self.assertEqual(result, {"restored": 0, "skipped": 2})
+
+    def test_refuses_to_overwrite_existing_source(self):
+        with TemporaryDirectory() as tmp:
+            data_dir, run_dir = self._setup_run(tmp)
+            # something now occupies abcd.set's original path
+            (data_dir / "abcd.set").write_text("someone else's file")
+
+            with self.assertRaises(QuarantineRestoreError):
+                restore_run(run_dir)
+
+            # efgh.set (processed after abcd.set) must be untouched
+            self.assertTrue((run_dir / "efgh.set").is_file())
 
 
 if __name__ == "__main__":

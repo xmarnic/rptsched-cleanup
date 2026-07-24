@@ -11,6 +11,10 @@ class QuarantineMoveError(RuntimeError):
     pass
 
 
+class QuarantineRestoreError(RuntimeError):
+    pass
+
+
 def make_run_dir(quarantine_dir: Path, prefix: str, timestamp: str) -> Path:
     quarantine_dir = Path(quarantine_dir)
     quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -66,3 +70,34 @@ def move_groups_to_quarantine(data_dir: Path, run_dir: Path, groups, moved_at: s
 
     write_manifest(run_dir, rows)
     return rows
+
+
+def restore_run(run_dir: Path) -> dict:
+    run_dir = Path(run_dir)
+    rows = read_manifest(run_dir)
+    restored = 0
+    skipped = 0
+
+    for row in rows:
+        dest_path = Path(row["dest_path"])
+        source_path = Path(row["source_path"])
+
+        if not dest_path.exists():
+            skipped += 1
+            continue
+
+        if source_path.exists():
+            raise QuarantineRestoreError(
+                "Cannot restore {}: source path {} already exists".format(row["filename"], source_path)
+            )
+
+        try:
+            shutil.move(str(dest_path), str(source_path))
+        except OSError as err:
+            raise QuarantineRestoreError(
+                "Failed to restore {}: {}".format(row["filename"], err)
+            ) from err
+
+        restored += 1
+
+    return {"restored": restored, "skipped": skipped}
