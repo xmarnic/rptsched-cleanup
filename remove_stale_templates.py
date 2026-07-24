@@ -41,6 +41,8 @@ def _write_removed_lines(run_dir: Path, removed_lines) -> Path:
 
 def _read_removed_lines(run_dir: Path):
     path = Path(run_dir) / REMOVED_LINES_FILENAME
+    if not path.exists():
+        return []
     with path.open() as f:
         return [line.rstrip("\n") for line in f if line.strip()]
 
@@ -75,6 +77,10 @@ def main(argv=None) -> int:
             print("  {}: {} | owner={} | freq={} | created={} | last_run={} | files={}".format(
                 c.id, c.description, c.owner, c.frequency_flag, c.created, c.last_run,
                 ", ".join(c.filenames)))
+        return 0
+
+    if not candidates:
+        print("No stale templates found; nothing to do.")
         return 0
 
     groups = {template_id: c.filenames for template_id, c in candidates.items()}

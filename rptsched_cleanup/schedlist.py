@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -16,6 +17,7 @@ def _atomic_write(schedlist_path: Path, lines):
         with os.fdopen(fd, "w") as f:
             for line in lines:
                 f.write(line + "\n")
+        shutil.copystat(str(schedlist_path), tmp_path)
         os.replace(tmp_path, str(schedlist_path))
     except Exception:
         if os.path.exists(tmp_path):

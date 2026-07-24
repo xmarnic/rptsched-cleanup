@@ -77,8 +77,10 @@ class TestExecute(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [ACTIVE_LINE], ["abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            schedlist_bytes_before = (data_dir / "schedlist").read_bytes()
 
-            with redirect_stdout(io.StringIO()):
+            out = io.StringIO()
+            with redirect_stdout(out):
                 exit_code = remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
@@ -89,6 +91,9 @@ class TestExecute(unittest.TestCase):
             self.assertTrue((data_dir / "abcd.set").exists())
             schedlist_lines = (data_dir / "schedlist").read_text().splitlines()
             self.assertEqual(schedlist_lines, [ACTIVE_LINE])
+            self.assertEqual((data_dir / "schedlist").read_bytes(), schedlist_bytes_before)
+            self.assertFalse(quarantine_dir.exists())
+            self.assertIn("no stale template", out.getvalue().lower())
 
     def test_execute_aborts_before_schedlist_rewrite_on_move_failure(self):
         with TemporaryDirectory() as tmp:
@@ -194,6 +199,36 @@ class TestRestore(unittest.TestCase):
             self.assertIn("Re-inserted 0 schedlist line(s), skipped 1", out.getvalue())
             schedlist_lines = (data_dir / "schedlist").read_text().splitlines()
             self.assertEqual(schedlist_lines, [STALE_LINE])  # not duplicated
+
+    def test_restore_after_failed_execute_handles_missing_removed_lines_file(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with patch("rptsched_cleanup.quarantine.shutil.move", side_effect=OSError("simulated failure")):
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    exit_code = remove_stale_templates.main([
+                        "--data-dir", str(data_dir),
+                        "--quarantine-dir", str(quarantine_dir),
+                        "--execute",
+                    ])
+            self.assertEqual(exit_code, 1)
+
+            run_dir = list(quarantine_dir.glob("templates_*"))[0]
+            self.assertTrue((run_dir / "manifest.csv").exists())
+            self.assertFalse((run_dir / "removed_schedlist_lines.txt").exists())
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("restored", out.getvalue().lower())
+            self.assertIn("Re-inserted 0 schedlist line(s)", out.getvalue())
 
     def test_restore_conflict_prints_error_exits_nonzero_and_skips_schedlist_phase(self):
         with TemporaryDirectory() as tmp:
