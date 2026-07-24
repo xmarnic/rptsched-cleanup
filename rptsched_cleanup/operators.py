@@ -1,8 +1,15 @@
+import os
+import shutil
+import tempfile
 from collections import namedtuple
 from pathlib import Path
 
 OperatorMismatch = namedtuple("OperatorMismatch", ["id", "old_operator", "new_operator"])
 SkippedId = namedtuple("SkippedId", ["id", "reason"])
+
+
+class MissingOperatorLineError(RuntimeError):
+    pass
 
 
 def _extract_operator(set_path):
@@ -43,3 +50,46 @@ def find_operator_mismatches(data_dir):
             mismatches[template_id] = OperatorMismatch(template_id, operator, owner)
 
     return mismatches, skipped
+
+
+def read_operator(data_dir, template_id):
+    set_path = Path(data_dir) / "{}.set".format(template_id)
+    if not set_path.is_file():
+        return None
+    return _extract_operator(set_path)
+
+
+def _atomic_write(set_path, lines):
+    fd, tmp_path = tempfile.mkstemp(dir=str(set_path.parent), prefix=".{}.".format(set_path.name), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+        shutil.copystat(str(set_path), tmp_path)
+        os.replace(tmp_path, str(set_path))
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
+def rewrite_operator(data_dir, template_id, new_value):
+    set_path = Path(data_dir) / "{}.set".format(template_id)
+
+    lines = []
+    found = False
+    with set_path.open() as f:
+        for line in f:
+            raw_line = line.rstrip("\n")
+            if raw_line.startswith("operator|"):
+                fields = raw_line.split("|")
+                fields[-2] = new_value
+                lines.append("|".join(fields))
+                found = True
+            else:
+                lines.append(raw_line)
+
+    if not found:
+        raise MissingOperatorLineError("No operator line found in {}".format(set_path))
+
+    _atomic_write(set_path, lines)

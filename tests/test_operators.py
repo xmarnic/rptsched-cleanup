@@ -2,7 +2,14 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rptsched_cleanup.operators import find_operator_mismatches, OperatorMismatch, SkippedId
+from rptsched_cleanup.operators import (
+    find_operator_mismatches,
+    OperatorMismatch,
+    SkippedId,
+    read_operator,
+    rewrite_operator,
+    MissingOperatorLineError,
+)
 from tests.fixtures import make_data_dir
 
 
@@ -103,6 +110,55 @@ class TestFindOperatorMismatches(unittest.TestCase):
 
             self.assertEqual(set(mismatches.keys()), {"bbbb"})
             self.assertEqual(skipped, [])
+
+
+class TestReadOperator(unittest.TestCase):
+    def test_reads_current_operator_value(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            _write_set_file(data_dir, "abcd", "SOMEOWNER")
+
+            self.assertEqual(read_operator(data_dir, "abcd"), "SOMEOWNER")
+
+    def test_returns_none_for_missing_set_file(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+
+            self.assertIsNone(read_operator(data_dir, "abcd"))
+
+
+class TestRewriteOperator(unittest.TestCase):
+    def test_rewrites_only_the_operator_value_field(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            _write_set_file(data_dir, "abcd", "OLDVALUE", middle_field="SIRSI")
+
+            rewrite_operator(data_dir, "abcd", "NEWVALUE")
+
+            content = (data_dir / "abcd.set").read_text()
+            self.assertIn("operator|0|SIRSI|NEWVALUE|", content)
+            self.assertNotIn("OLDVALUE", content)
+            # other lines untouched
+            self.assertIn("desc|0||$(14837)|", content)
+            self.assertIn("title|0||-t$(14836)|", content)
+
+    def test_rewrite_is_atomic_no_tmp_file_left_behind(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            _write_set_file(data_dir, "abcd", "OLDVALUE")
+
+            rewrite_operator(data_dir, "abcd", "NEWVALUE")
+
+            remaining = list(data_dir.iterdir())
+            self.assertEqual([p.name for p in remaining], ["abcd.set"])
+
+    def test_raises_when_no_operator_line_present(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            (data_dir / "abcd.set").write_text("desc|0||$(14837)|\n")
+
+            with self.assertRaises(MissingOperatorLineError):
+                rewrite_operator(data_dir, "abcd", "NEWVALUE")
 
 
 if __name__ == "__main__":
