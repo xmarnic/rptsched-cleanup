@@ -6,9 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Scripts to clean up `rptsched/`, a Symphony ILS (SirsiDynix) report-scheduler
 data directory, in production at `/software/WYLD/Unicorn/Rptsched/`. This repo
-is not yet a git repository and currently contains no implementation code —
-work is in the design/spec phase using the `superpowers:brainstorming` →
-`superpowers:writing-plans` workflow.
+currently contains no implementation code yet — work is in the design/spec
+phase using the `superpowers:brainstorming` → `superpowers:writing-plans`
+workflow.
+
+## Tooling
+
+**Python 3.6.8, standard library only.** The production server is RHEL8
+without admin access, so no dependable way to `pip install` third-party
+packages — everything must run on stdlib alone (`argparse`, `csv`,
+`pathlib`, `shutil.move`, `re`, `datetime`, `tempfile` + `os.replace` for
+atomic file replacement, `unittest` for tests). 3.6.8 also means: no
+dataclasses (3.7+), no f-string `=` debugging or walrus operator (3.8+) —
+use plain classes/namedtuples and regular f-strings.
 
 **Read `rptsched-domain-reference.md` first, in full, before working on any
 cleanup logic.** It is the authoritative source for: `schedlist` file format,
