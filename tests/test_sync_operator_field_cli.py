@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import sync_operator_field
-from rptsched_cleanup.operators import read_operator_manifest
+from rptsched_cleanup.operators import read_operator, read_operator_manifest
 from tests.fixtures import make_data_dir
 
 MATCHING_LINE = "aaaa|noverdue|Matching Template|n|200207021051|202001010000|SAMEOWNER||||||0|3||0|$<library_notice:c>|ENGLISH|"
@@ -125,6 +125,98 @@ class TestExecute(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertIn("simulated failure", err.getvalue())
             self.assertIn("STALEOWNER", (data_dir / "bbbb.set").read_text())
+
+
+class TestRestore(unittest.TestCase):
+    def test_restore_reverts_corrected_operator(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [MISMATCH_LINE], [])
+            _write_set_file(data_dir, "bbbb", "STALEOWNER")
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with redirect_stdout(io.StringIO()):
+                sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--execute",
+                ])
+            run_dir = list(quarantine_dir.glob("operators_*"))[0]
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(read_operator(data_dir, "bbbb"), "STALEOWNER")
+            self.assertIn("restored 1", out.getvalue().lower())
+
+    def test_second_restore_is_idempotent(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [MISMATCH_LINE], [])
+            _write_set_file(data_dir, "bbbb", "STALEOWNER")
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with redirect_stdout(io.StringIO()):
+                sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--execute",
+                ])
+            run_dir = list(quarantine_dir.glob("operators_*"))[0]
+
+            with redirect_stdout(io.StringIO()):
+                sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("restored 0", out.getvalue().lower())
+            self.assertIn("skipped 1", out.getvalue().lower())
+            self.assertEqual(read_operator(data_dir, "bbbb"), "STALEOWNER")
+
+    def test_restore_aborts_on_unexpected_current_value(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [MISMATCH_LINE], [])
+            _write_set_file(data_dir, "bbbb", "STALEOWNER")
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with redirect_stdout(io.StringIO()):
+                sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--execute",
+                ])
+            run_dir = list(quarantine_dir.glob("operators_*"))[0]
+
+            # something else changed the operator value since the execute run
+            from rptsched_cleanup.operators import rewrite_operator
+            rewrite_operator(data_dir, "bbbb", "SOMETHINGELSE")
+
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                exit_code = sync_operator_field.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--restore", str(run_dir),
+                ])
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("bbbb", err.getvalue())
+            self.assertEqual(read_operator(data_dir, "bbbb"), "SOMETHINGELSE")
 
 
 if __name__ == "__main__":

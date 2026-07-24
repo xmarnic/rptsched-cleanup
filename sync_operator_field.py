@@ -4,7 +4,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rptsched_cleanup.operators import find_operator_mismatches, apply_mismatches, OperatorRewriteError
+from rptsched_cleanup.operators import (
+    find_operator_mismatches,
+    apply_mismatches,
+    read_operator,
+    rewrite_operator,
+    read_operator_manifest,
+    OperatorRewriteError,
+)
 from rptsched_cleanup.quarantine import make_run_dir
 
 
@@ -23,6 +30,35 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.restore:
+        rows = read_operator_manifest(args.restore)
+        restored = 0
+        skipped = 0
+        for row in rows:
+            template_id = row["id"]
+            old_operator = row["old_operator"]
+            new_operator = row["new_operator"]
+            current = read_operator(args.data_dir, template_id)
+
+            if current == old_operator:
+                skipped += 1
+                continue
+            if current == new_operator:
+                rewrite_operator(args.data_dir, template_id, old_operator)
+                restored += 1
+                continue
+
+            print(
+                "Cannot restore {}: current operator {!r} matches neither old ({!r}) nor new ({!r})".format(
+                    template_id, current, old_operator, new_operator
+                ),
+                file=sys.stderr,
+            )
+            return 1
+
+        print("Restored {} operator value(s), skipped {} already-restored".format(restored, skipped))
+        return 0
 
     mismatches, skipped = find_operator_mismatches(args.data_dir)
     for skip in skipped:
