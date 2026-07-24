@@ -7,6 +7,10 @@ MANIFEST_FIELDS = ["id", "filename", "extension", "source_path", "dest_path", "m
 MANIFEST_FILENAME = "manifest.csv"
 
 
+class QuarantineMoveError(RuntimeError):
+    pass
+
+
 def make_run_dir(quarantine_dir: Path, prefix: str, timestamp: str) -> Path:
     quarantine_dir = Path(quarantine_dir)
     quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -38,21 +42,27 @@ def move_groups_to_quarantine(data_dir: Path, run_dir: Path, groups, moved_at: s
     run_dir = Path(run_dir)
     rows = []
 
-    for file_id in sorted(groups):
-        for filename in sorted(groups[file_id]):
-            source_path = data_dir / filename
-            dest_path = run_dir / filename
-            shutil.move(str(source_path), str(dest_path))
+    try:
+        for file_id in sorted(groups):
+            for filename in sorted(groups[file_id]):
+                source_path = data_dir / filename
+                dest_path = run_dir / filename
+                shutil.move(str(source_path), str(dest_path))
 
-            extension = filename.split(".", 1)[1] if "." in filename else ""
-            rows.append({
-                "id": file_id,
-                "filename": filename,
-                "extension": extension,
-                "source_path": str(source_path),
-                "dest_path": str(dest_path),
-                "moved_at": moved_at,
-            })
+                extension = filename.split(".", 1)[1] if "." in filename else ""
+                rows.append({
+                    "id": file_id,
+                    "filename": filename,
+                    "extension": extension,
+                    "source_path": str(source_path),
+                    "dest_path": str(dest_path),
+                    "moved_at": moved_at,
+                })
+    except OSError as err:
+        write_manifest(run_dir, rows)
+        raise QuarantineMoveError(
+            "Failed to move a file to quarantine; {} file(s) moved before the failure: {}".format(len(rows), err)
+        ) from err
 
     write_manifest(run_dir, rows)
     return rows

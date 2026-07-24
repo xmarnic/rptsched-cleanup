@@ -1,8 +1,10 @@
+import shutil
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine
+from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine, QuarantineMoveError
 
 
 class TestMakeRunDir(unittest.TestCase):
@@ -85,6 +87,40 @@ class TestMoveGroupsSuccess(unittest.TestCase):
             self.assertEqual(abcd_set_row["source_path"], str(data_dir / "abcd.set"))
             self.assertEqual(abcd_set_row["dest_path"], str(run_dir / "abcd.set"))
             self.assertEqual(abcd_set_row["moved_at"], "20260724_090000")
+
+
+class TestMoveGroupsAbortOnFailure(unittest.TestCase):
+    def test_aborts_and_writes_partial_manifest_on_move_failure(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "data"
+            data_dir.mkdir()
+            (data_dir / "abcd.set").write_text("set content")
+            (data_dir / "efgh.set").write_text("other set content")
+
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "orphans", "20260724_090000")
+            groups = {"abcd": ["abcd.set"], "efgh": ["efgh.set"]}
+
+            real_move = shutil.move
+
+            def fail_on_efgh(src, dst):
+                if "efgh" in src:
+                    raise OSError("simulated failure moving efgh.set")
+                return real_move(src, dst)
+
+            with patch("rptsched_cleanup.quarantine.shutil.move", side_effect=fail_on_efgh):
+                with self.assertRaises(QuarantineMoveError):
+                    move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
+
+            # abcd moved (sorts before efgh), efgh did not
+            self.assertFalse((data_dir / "abcd.set").exists())
+            self.assertTrue((run_dir / "abcd.set").is_file())
+            self.assertTrue((data_dir / "efgh.set").exists())
+            self.assertFalse((run_dir / "efgh.set").exists())
+
+            # manifest reflects only the successful move
+            rows = read_manifest(run_dir)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["filename"], "abcd.set")
 
 
 if __name__ == "__main__":
