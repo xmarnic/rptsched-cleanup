@@ -11,6 +11,7 @@ from rptsched_cleanup.operators import (
     rewrite_operator,
     read_operator_manifest,
     OperatorRewriteError,
+    InvalidManifestError,
 )
 from rptsched_cleanup.quarantine import make_run_dir
 
@@ -32,7 +33,12 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.restore:
-        rows = read_operator_manifest(args.restore)
+        try:
+            rows = read_operator_manifest(args.restore)
+        except InvalidManifestError as err:
+            print(str(err), file=sys.stderr)
+            return 1
+
         restored = 0
         skipped = 0
         for row in rows:
@@ -45,7 +51,14 @@ def main(argv=None) -> int:
                 skipped += 1
                 continue
             if current == new_operator:
-                rewrite_operator(args.data_dir, template_id, old_operator)
+                try:
+                    rewrite_operator(args.data_dir, template_id, old_operator)
+                except OSError as err:
+                    print(
+                        "Failed to restore operator for {}: {}".format(template_id, err),
+                        file=sys.stderr,
+                    )
+                    return 1
                 restored += 1
                 continue
 

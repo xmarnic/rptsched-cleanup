@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -225,6 +226,46 @@ class TestApplyMismatches(unittest.TestCase):
             self.assertEqual(read_operator_manifest(run_dir), [])
             # original files untouched (atomic write failed before replace)
             self.assertEqual(read_operator(data_dir, "aaaa"), "OLDA")
+
+    def test_manifest_contains_only_rows_completed_before_failure(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "data"
+            data_dir.mkdir()
+            _write_set_file(data_dir, "aaaa", "OLDA")
+            _write_set_file(data_dir, "bbbb", "OLDB")
+            _write_set_file(data_dir, "cccc", "OLDC")
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+
+            mismatches = {
+                "aaaa": OperatorMismatch("aaaa", "OLDA", "NEWA"),
+                "bbbb": OperatorMismatch("bbbb", "OLDB", "NEWB"),
+                "cccc": OperatorMismatch("cccc", "OLDC", "NEWC"),
+            }
+
+            real_replace = os.replace
+            calls = {"count": 0}
+
+            def flaky_replace(*args, **kwargs):
+                calls["count"] += 1
+                if calls["count"] >= 3:
+                    raise OSError("simulated failure on third rewrite")
+                return real_replace(*args, **kwargs)
+
+            with patch("rptsched_cleanup.operators.os.replace", side_effect=flaky_replace):
+                with self.assertRaises(OperatorRewriteError):
+                    apply_mismatches(data_dir, run_dir, mismatches)
+
+            # aaaa and bbbb (sorted first) succeeded before cccc failed
+            self.assertEqual(
+                read_operator_manifest(run_dir),
+                [
+                    {"id": "aaaa", "old_operator": "OLDA", "new_operator": "NEWA"},
+                    {"id": "bbbb", "old_operator": "OLDB", "new_operator": "NEWB"},
+                ],
+            )
+            self.assertEqual(read_operator(data_dir, "aaaa"), "NEWA")
+            self.assertEqual(read_operator(data_dir, "bbbb"), "NEWB")
+            self.assertEqual(read_operator(data_dir, "cccc"), "OLDC")
 
 
 if __name__ == "__main__":

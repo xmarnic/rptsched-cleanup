@@ -82,7 +82,7 @@ def rewrite_operator(data_dir, template_id, new_value):
     with set_path.open() as f:
         for line in f:
             raw_line = line.rstrip("\n")
-            if raw_line.startswith("operator|"):
+            if not found and raw_line.startswith("operator|"):
                 fields = raw_line.split("|")
                 fields[-2] = new_value
                 lines.append("|".join(fields))
@@ -104,6 +104,10 @@ class OperatorRewriteError(RuntimeError):
     pass
 
 
+class InvalidManifestError(RuntimeError):
+    pass
+
+
 def write_operator_manifest(run_dir, rows):
     manifest_path = Path(run_dir) / MANIFEST_FILENAME
     with manifest_path.open("w", newline="") as f:
@@ -118,6 +122,10 @@ def read_operator_manifest(run_dir):
     manifest_path = Path(run_dir) / MANIFEST_FILENAME
     with manifest_path.open("r", newline="") as f:
         reader = csv.DictReader(f)
+        if reader.fieldnames != MANIFEST_FIELDS:
+            raise InvalidManifestError(
+                "manifest at {} is not a sync_operator_field run (unexpected columns)".format(manifest_path)
+            )
         return [dict(row) for row in reader]
 
 
