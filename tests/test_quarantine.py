@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS
+from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine
 
 
 class TestMakeRunDir(unittest.TestCase):
@@ -51,6 +51,40 @@ class TestManifestRoundTrip(unittest.TestCase):
             MANIFEST_FIELDS,
             ["id", "filename", "extension", "source_path", "dest_path", "moved_at"],
         )
+
+
+class TestMoveGroupsSuccess(unittest.TestCase):
+    def test_moves_all_files_and_writes_manifest(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "data"
+            data_dir.mkdir()
+            (data_dir / "abcd.set").write_text("set content")
+            (data_dir / "abcd.user").write_text("user content")
+            (data_dir / "efgh.set").write_text("other set content")
+
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "orphans", "20260724_090000")
+            groups = {"abcd": ["abcd.set", "abcd.user"], "efgh": ["efgh.set"]}
+
+            rows = move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
+
+            self.assertEqual(len(rows), 3)
+            self.assertFalse((data_dir / "abcd.set").exists())
+            self.assertFalse((data_dir / "abcd.user").exists())
+            self.assertFalse((data_dir / "efgh.set").exists())
+            self.assertTrue((run_dir / "abcd.set").is_file())
+            self.assertTrue((run_dir / "abcd.user").is_file())
+            self.assertTrue((run_dir / "efgh.set").is_file())
+            self.assertTrue((run_dir / "manifest.csv").is_file())
+
+            read_rows = read_manifest(run_dir)
+            self.assertEqual(read_rows, rows)
+
+            abcd_set_row = next(r for r in rows if r["filename"] == "abcd.set")
+            self.assertEqual(abcd_set_row["id"], "abcd")
+            self.assertEqual(abcd_set_row["extension"], "set")
+            self.assertEqual(abcd_set_row["source_path"], str(data_dir / "abcd.set"))
+            self.assertEqual(abcd_set_row["dest_path"], str(run_dir / "abcd.set"))
+            self.assertEqual(abcd_set_row["moved_at"], "20260724_090000")
 
 
 if __name__ == "__main__":
