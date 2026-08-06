@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rptsched_cleanup.orphans import find_orphan_groups
+from rptsched_lib.orphans import find_orphan_groups
 from tests.fixtures import make_data_dir
 
 

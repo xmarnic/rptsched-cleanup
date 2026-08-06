@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rptsched_cleanup.schedlist import remove_lines, insert_lines
+from rptsched_lib.schedlist import remove_lines, insert_lines
 from tests.fixtures import make_data_dir
 
 

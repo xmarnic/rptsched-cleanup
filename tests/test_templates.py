@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from tempfile import TemporaryDirectory
 
-from rptsched_cleanup.templates import find_stale_template_candidates
+from rptsched_lib.templates import find_stale_template_candidates
 from tests.fixtures import make_data_dir
 
 TODAY = datetime(2026, 7, 24)

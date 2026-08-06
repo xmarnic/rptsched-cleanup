@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import remove_stale_templates
-from rptsched_cleanup.templates import find_stale_template_candidates
+from rptsched_lib.templates import find_stale_template_candidates
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_DATA_DIR = REPO_ROOT / "rptsched"

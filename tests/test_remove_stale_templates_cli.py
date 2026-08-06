@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import remove_stale_templates
-from rptsched_cleanup.quarantine import read_manifest
+from rptsched_lib.quarantine import read_manifest
 from tests.fixtures import make_data_dir
 
 STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
@@ -100,7 +100,7 @@ class TestExecute(unittest.TestCase):
             data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
 
-            with patch("rptsched_cleanup.quarantine.shutil.move", side_effect=OSError("simulated failure")):
+            with patch("rptsched_lib.quarantine.shutil.move", side_effect=OSError("simulated failure")):
                 err = io.StringIO()
                 with redirect_stdout(io.StringIO()), redirect_stderr(err):
                     exit_code = remove_stale_templates.main([
@@ -205,7 +205,7 @@ class TestRestore(unittest.TestCase):
             data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
 
-            with patch("rptsched_cleanup.quarantine.shutil.move", side_effect=OSError("simulated failure")):
+            with patch("rptsched_lib.quarantine.shutil.move", side_effect=OSError("simulated failure")):
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     exit_code = remove_stale_templates.main([
                         "--data-dir", str(data_dir),

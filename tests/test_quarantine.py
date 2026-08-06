@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from rptsched_cleanup.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine, QuarantineMoveError, restore_run, QuarantineRestoreError
+from rptsched_lib.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine, QuarantineMoveError, restore_run, QuarantineRestoreError
 
 
 class TestMakeRunDir(unittest.TestCase):
@@ -107,7 +107,7 @@ class TestMoveGroupsAbortOnFailure(unittest.TestCase):
                     raise OSError("simulated failure moving efgh.set")
                 return real_move(src, dst)
 
-            with patch("rptsched_cleanup.quarantine.shutil.move", side_effect=fail_on_efgh):
+            with patch("rptsched_lib.quarantine.shutil.move", side_effect=fail_on_efgh):
                 with self.assertRaises(QuarantineMoveError):
                     move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
 

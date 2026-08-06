@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rptsched_cleanup.operators import (
+from rptsched_lib.operators import (
     find_operator_mismatches,
     apply_mismatches,
     read_operator,
@@ -13,7 +13,7 @@ from rptsched_cleanup.operators import (
     OperatorRewriteError,
     InvalidManifestError,
 )
-from rptsched_cleanup.quarantine import make_run_dir
+from rptsched_lib.quarantine import make_run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

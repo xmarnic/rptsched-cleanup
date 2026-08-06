@@ -4,9 +4,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rptsched_cleanup.templates import find_stale_template_candidates
-from rptsched_cleanup.schedlist import remove_lines, insert_lines
-from rptsched_cleanup.quarantine import (
+from rptsched_lib.templates import find_stale_template_candidates
+from rptsched_lib.schedlist import remove_lines, insert_lines
+from rptsched_lib.quarantine import (
     QuarantineMoveError,
     QuarantineRestoreError,
     make_run_dir,

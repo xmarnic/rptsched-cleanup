@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import remove_orphans
-from rptsched_cleanup.quarantine import read_manifest
+from rptsched_lib.quarantine import read_manifest
 from tests.fixtures import make_data_dir
 
 

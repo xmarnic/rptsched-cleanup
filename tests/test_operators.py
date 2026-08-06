@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from rptsched_cleanup.operators import (
+from rptsched_lib.operators import (
     find_operator_mismatches,
     OperatorMismatch,
     SkippedId,
@@ -17,7 +17,7 @@ from rptsched_cleanup.operators import (
     OperatorRewriteError,
     MANIFEST_FIELDS,
 )
-from rptsched_cleanup.quarantine import make_run_dir
+from rptsched_lib.quarantine import make_run_dir
 from tests.fixtures import make_data_dir
 
 
@@ -218,7 +218,7 @@ class TestApplyMismatches(unittest.TestCase):
                 "bbbb": OperatorMismatch("bbbb", "OLDB", "NEWB"),
             }
 
-            with patch("rptsched_cleanup.operators.os.replace", side_effect=OSError("simulated failure")):
+            with patch("rptsched_lib.operators.os.replace", side_effect=OSError("simulated failure")):
                 with self.assertRaises(OperatorRewriteError):
                     apply_mismatches(data_dir, run_dir, mismatches)
 
@@ -251,7 +251,7 @@ class TestApplyMismatches(unittest.TestCase):
                     raise OSError("simulated failure on third rewrite")
                 return real_replace(*args, **kwargs)
 
-            with patch("rptsched_cleanup.operators.os.replace", side_effect=flaky_replace):
+            with patch("rptsched_lib.operators.os.replace", side_effect=flaky_replace):
                 with self.assertRaises(OperatorRewriteError):
                     apply_mismatches(data_dir, run_dir, mismatches)
 

@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import sync_operator_field
-from rptsched_cleanup.operators import read_operator, read_operator_manifest
+from rptsched_lib.operators import read_operator, read_operator_manifest
 from tests.fixtures import make_data_dir
 
 MATCHING_LINE = "aaaa|noverdue|Matching Template|n|200207021051|202001010000|SAMEOWNER||||||0|3||0|$<library_notice:c>|ENGLISH|"
@@ -113,7 +113,7 @@ class TestExecute(unittest.TestCase):
             _write_set_file(data_dir, "bbbb", "STALEOWNER")
             quarantine_dir = Path(tmp) / "quarantine"
 
-            with patch("rptsched_cleanup.operators.os.replace", side_effect=OSError("simulated failure")):
+            with patch("rptsched_lib.operators.os.replace", side_effect=OSError("simulated failure")):
                 err = io.StringIO()
                 with redirect_stdout(io.StringIO()), redirect_stderr(err):
                     exit_code = sync_operator_field.main([
@@ -203,7 +203,7 @@ class TestRestore(unittest.TestCase):
             run_dir = list(quarantine_dir.glob("operators_*"))[0]
 
             # something else changed the operator value since the execute run
-            from rptsched_cleanup.operators import rewrite_operator
+            from rptsched_lib.operators import rewrite_operator
             rewrite_operator(data_dir, "bbbb", "SOMETHINGELSE")
 
             err = io.StringIO()

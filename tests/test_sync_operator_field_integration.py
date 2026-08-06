@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import sync_operator_field
-from rptsched_cleanup.operators import find_operator_mismatches
+from rptsched_lib.operators import find_operator_mismatches
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_DATA_DIR = REPO_ROOT / "rptsched"

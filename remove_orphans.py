@@ -4,8 +4,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rptsched_cleanup.orphans import find_orphan_groups
-from rptsched_cleanup.quarantine import (
+from rptsched_lib.orphans import find_orphan_groups
+from rptsched_lib.quarantine import (
     QuarantineMoveError,
     QuarantineRestoreError,
     make_run_dir,

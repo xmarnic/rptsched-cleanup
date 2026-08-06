@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import remove_orphans
-from rptsched_cleanup.quarantine import read_manifest
+from rptsched_lib.quarantine import read_manifest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_DATA_DIR = REPO_ROOT / "rptsched"
