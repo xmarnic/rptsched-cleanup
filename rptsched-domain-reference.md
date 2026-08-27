@@ -89,11 +89,16 @@ Note this looks at `last_run`/`created`, not "is the schedule still
 turned on" — a recurring template can be inactive if, e.g., its schedule
 stopped firing or its output silently stopped mattering to anyone.
 
-**ACQ exclusion** — regardless of inactivity, any saved template whose
-`owner` field contains the substring `ACQ` (case-insensitive) is left
-alone entirely and is never a removal candidate (stale or scheduled).
-Acquisitions-owned templates are out of scope for this cleanup effort by
-policy, not by usage pattern.
+**Owner exclusion** — regardless of inactivity, a saved template whose
+`owner` field is excluded via `--exclude-owner` (exact match) or
+`--exclude-owner-regex` (regex match) is left alone entirely and is
+never a removal candidate (stale or scheduled). This is a CLI-configured
+mechanism, not hardcoded — the scripts ship with no owner exclusions by
+default. For WYLD, Acquisitions-owned templates (`owner` containing
+`ACQ`, case-insensitive) are out of scope for this cleanup effort by
+policy, not by usage pattern; that's expressed as
+`--exclude-owner-regex ACQ` in this site's own invocation, not as
+built-in script behavior.
 
 ## Trustworthy vs. untrustworthy signals
 

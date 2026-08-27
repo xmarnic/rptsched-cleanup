@@ -25,6 +25,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--quarantine-dir", required=True, type=Path)
     parser.add_argument("--years", type=int, default=3)
+    parser.add_argument(
+        "--exclude-owner", action="append", default=[], metavar="OWNER",
+        help="Exclude templates whose owner exactly matches OWNER (case-insensitive). Repeatable.",
+    )
+    parser.add_argument(
+        "--exclude-owner-regex", action="append", default=[], metavar="PATTERN",
+        help="Exclude templates whose owner matches regex PATTERN (case-insensitive, unanchored search). Repeatable.",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--execute", action="store_true")
     mode.add_argument("--restore", metavar="RUN_DIR", type=Path)
@@ -67,7 +75,11 @@ def main(argv=None) -> int:
             schedlist_result["inserted"], schedlist_result["skipped"]))
         return 0
 
-    candidates = find_stale_template_candidates(args.data_dir, years=args.years)
+    candidates = find_stale_template_candidates(
+        args.data_dir, years=args.years,
+        exclude_owners=args.exclude_owner,
+        exclude_owner_regexes=args.exclude_owner_regex,
+    )
     total_files = sum(len(c.filenames) for c in candidates.values())
 
     if not args.execute:

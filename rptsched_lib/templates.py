@@ -41,11 +41,19 @@ def _group_files_by_id(data_dir: Path):
     return groups
 
 
-def find_stale_template_candidates(data_dir, years=3, today=None):
+def _is_excluded_owner(owner, exclude_owners, exclude_owner_regexes):
+    owner_lower = owner.lower()
+    if any(owner_lower == pattern.lower() for pattern in exclude_owners):
+        return True
+    return any(regex.search(owner) for regex in exclude_owner_regexes)
+
+
+def find_stale_template_candidates(data_dir, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
     data_dir = Path(data_dir)
     if today is None:
         today = datetime.now()
     threshold = _years_before(today, years)
+    compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
 
     file_groups = _group_files_by_id(data_dir)
 
@@ -63,7 +71,7 @@ def find_stale_template_candidates(data_dir, years=3, today=None):
 
             if frequency_flag != "n":
                 continue
-            if "acq" in owner.lower():
+            if _is_excluded_owner(owner, exclude_owners, compiled_regexes):
                 continue
             if not _is_stale(created, last_run, threshold):
                 continue

@@ -46,14 +46,65 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
 
             self.assertEqual(candidates, {})
 
-    def test_excludes_acq_owner_case_insensitive(self):
+    def test_no_owner_exclusions_by_default(self):
         with TemporaryDirectory() as tmp:
-            lines = [_line("abcd", owner="acqMGR", last_run="202001010000")]
+            lines = [_line("abcd", owner="ACQ", last_run="202001010000")]
             data_dir = make_data_dir(tmp, lines, ["abcd.set"])
 
             candidates = find_stale_template_candidates(data_dir, years=3, today=TODAY)
 
+            self.assertEqual(set(candidates.keys()), {"abcd"})
+
+    def test_exclude_owners_is_exact_match_case_insensitive(self):
+        with TemporaryDirectory() as tmp:
+            lines = [
+                _line("abcd", owner="acqMGR", last_run="202001010000"),
+                _line("efgh", owner="ACQMGR", last_run="202001010000"),
+            ]
+            data_dir = make_data_dir(tmp, lines, ["abcd.set", "efgh.set"])
+
+            candidates = find_stale_template_candidates(
+                data_dir, years=3, today=TODAY, exclude_owners=["acqmgr"],
+            )
+
             self.assertEqual(candidates, {})
+
+    def test_exclude_owners_does_not_match_as_substring(self):
+        with TemporaryDirectory() as tmp:
+            # exclude_owners=["ACQ1"] should not catch an owner that merely contains "ACQ1"
+            lines = [_line("abcd", owner="ACQ10", last_run="202001010000")]
+            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+
+            candidates = find_stale_template_candidates(
+                data_dir, years=3, today=TODAY, exclude_owners=["ACQ1"],
+            )
+
+            self.assertEqual(set(candidates.keys()), {"abcd"})
+
+    def test_exclude_owner_regexes_matches_as_unanchored_substring(self):
+        with TemporaryDirectory() as tmp:
+            lines = [_line("abcd", owner="ACQHQ", last_run="202001010000")]
+            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+
+            candidates = find_stale_template_candidates(
+                data_dir, years=3, today=TODAY, exclude_owner_regexes=["acq"],
+            )
+
+            self.assertEqual(candidates, {})
+
+    def test_exclude_owner_regexes_respects_anchors(self):
+        with TemporaryDirectory() as tmp:
+            lines = [
+                _line("abcd", owner="ACQ1", last_run="202001010000"),
+                _line("efgh", owner="jsmith-acq", last_run="202001010000"),
+            ]
+            data_dir = make_data_dir(tmp, lines, ["abcd.set", "efgh.set"])
+
+            candidates = find_stale_template_candidates(
+                data_dir, years=3, today=TODAY, exclude_owner_regexes=["^acq"],
+            )
+
+            self.assertEqual(set(candidates.keys()), {"efgh"})
 
     def test_excludes_recently_active_template(self):
         with TemporaryDirectory() as tmp:

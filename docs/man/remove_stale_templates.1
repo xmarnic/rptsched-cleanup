@@ -8,6 +8,8 @@ remove_stale_templates.py \- quarantine stale manual saved templates and prune t
 .B \-\-quarantine\-dir
 .I DIR
 [\fB\-\-years\fR \fIN\fR]
+[\fB\-\-exclude\-owner\fR \fIOWNER\fR ...]
+[\fB\-\-exclude\-owner\-regex\fR \fIPATTERN\fR ...]
 [\fB\-\-execute\fR | \fB\-\-restore\fR \fIRUN_DIR\fR]
 .SH DESCRIPTION
 .B remove_stale_templates.py
@@ -28,9 +30,8 @@ is \fBn\fR \- the template is manual (run by hand only), not on a
 recurring Symphony schedule.
 .IP \(bu 2
 .B owner
-does not contain the substring \fBACQ\fR, case\-insensitive (the ACQ
-exclusion \- Acquisitions\-owned templates are never a candidate,
-regardless of activity).
+is not excluded by any \fB\-\-exclude\-owner\fR or
+\fB\-\-exclude\-owner\-regex\fR entry passed on the command line.
 .IP \(bu 2
 It satisfies the
 .B inactivity rule:
@@ -58,6 +59,21 @@ does not already exist. Required in every mode.
 .BR \-\-years " " \fIN\fR
 Inactivity threshold in years, applied to both \fBlast_run\fR and, when
 the template has never run, \fBcreated\fR. Default: \fB3\fR.
+.TP
+.BR \-\-exclude\-owner " " \fIOWNER\fR
+Exclude templates whose \fBowner\fR is an exact, case\-insensitive match
+for \fIOWNER\fR. Repeatable \- pass once per owner to exclude a specific
+set. No substring matching: \fB\-\-exclude\-owner ACQ1\fR excludes only an
+owner literally named \fBACQ1\fR, not \fBACQ10\fR. Not set by default \-
+this script excludes no owners unless told to.
+.TP
+.BR \-\-exclude\-owner\-regex " " \fIPATTERN\fR
+Exclude templates whose \fBowner\fR matches regex \fIPATTERN\fR via
+case\-insensitive, unanchored \fBre.search\fR. Repeatable. Breadth is the
+caller's responsibility through regex syntax \- e.g. \fBACQ\fR matches
+\fBACQ1\fR, \fBACQHQ\fR, and \fBjsmith\-acq\fR anywhere in the owner
+string; \fB^ACQ\fR matches only owners starting with it. Not set by
+default.
 .TP
 .B \-\-execute
 Perform the move and the \fIschedlist\fR rewrite. Without this flag the
@@ -146,6 +162,12 @@ Use a 5\-year threshold instead:
 Execute a run:
 .B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-execute
 .TP
+Exclude a specific list of owners:
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-exclude\-owner ACQ1 \-\-exclude\-owner ACQ2
+.TP
+Exclude any owner containing "ACQ", regardless of case:
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-exclude\-owner\-regex ACQ
+.TP
 Undo a specific run (files and schedlist lines both):
 .B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-restore ./quarantine/templates_20260826_140501
 .SH SEE ALSO
@@ -153,8 +175,8 @@ Undo a specific run (files and schedlist lines both):
 .BR sync_operator_field.py (1)
 
 Domain reference: \fIrptsched\-domain\-reference.md\fR in the
-rptsched\-cleanup repository \- see "Inactivity rule" and "ACQ exclusion"
-under "Definitions", and the \fIschedlist\fR field table.
+rptsched\-cleanup repository \- see "Inactivity rule" and "Owner
+exclusion" under "Definitions", and the \fIschedlist\fR field table.
 .SH CAVEATS
 Requires Python 3.6.8, standard library only.
 

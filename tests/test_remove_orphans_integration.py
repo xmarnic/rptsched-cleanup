@@ -28,7 +28,10 @@ class TestRemoveOrphansAgainstSampleData(unittest.TestCase):
                 ])
 
             self.assertEqual(exit_code, 0)
-            self.assertIn("40 orphan id(s)", out.getvalue())
+            # Orphan count has no time dependency (unlike staleness), so this
+            # is a known value tied to the rptsched.tar.gz snapshot in
+            # rptsched/ — update it if that snapshot is ever refreshed.
+            self.assertIn("187 orphan id(s)", out.getvalue())
 
     def test_execute_then_restore_round_trips_cleanly(self):
         with TemporaryDirectory() as tmp:

@@ -10,9 +10,9 @@ quarantine their files (never delete) and remove their line from
 way to reverse the action.
 
 See `rptsched-domain-reference.md` for full domain background (`schedlist`
-format, inactivity rule, ACQ exclusion, trustworthy vs. untrustworthy
-mtimes). See `2026-07-24-remove-orphans-design.md` for the sibling script
-this one shares its move/manifest/restore mechanics with.
+format, inactivity rule, trustworthy vs. untrustworthy mtimes). See
+`2026-07-24-remove-orphans-design.md` for the sibling script this one
+shares its move/manifest/restore mechanics with.
 
 This spec covers only stale (manual) templates. Scheduled report removal
 candidates (recurring `frequency_flag`, otherwise the same inactivity
@@ -29,6 +29,21 @@ Both required as CLI arguments, never hardcoded:
 - `--years` (optional, default `3`) — override for the inactivity
   threshold, for testing the logic against different windows. Production
   runs should rely on the default, which matches the domain doc's policy.
+- `--exclude-owner OWNER` (optional, repeatable) — exclude templates whose
+  `owner` field is an exact, case-insensitive match for `OWNER`. No
+  substring matching, no surprises: excludes only the literal owner(s)
+  named.
+- `--exclude-owner-regex PATTERN` (optional, repeatable) — exclude
+  templates whose `owner` field matches regex `PATTERN` via
+  case-insensitive, unanchored `re.search`. Breadth is the caller's
+  responsibility via regex syntax (e.g. `ACQ` matches anywhere in the
+  owner, `^ACQ` matches only owners starting with it).
+
+Neither flag has a built-in default — this tool ships with zero owner
+exclusions unless a caller passes one. Any site-specific default (e.g.
+WYLD excluding all ACQ-owned templates via `--exclude-owner-regex ACQ`)
+lives in that site's own invocation/wrapper, not in this script or the
+shared library.
 
 ## Candidate selection
 
@@ -40,9 +55,9 @@ of the following hold:
    `last_run != 0000000000 AND last_run is --years+ before today`
    `OR`
    `last_run == 0000000000 AND created is --years+ before today`
-3. `owner` does **not** contain the substring `ACQ` (case-insensitive) —
-   ACQ-owned templates are excluded from consideration entirely,
-   regardless of inactivity.
+3. `owner` is not excluded by any `--exclude-owner` (exact match) or
+   `--exclude-owner-regex` (regex match) entry passed on the command
+   line.
 
 "Today" is the script's run date.
 

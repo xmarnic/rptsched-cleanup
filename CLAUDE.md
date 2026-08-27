@@ -20,6 +20,12 @@ atomic file replacement, `unittest` for tests). 3.6.8 also means: no
 dataclasses (3.7+), no f-string `=` debugging or walrus operator (3.8+) —
 use plain classes/namedtuples and regular f-strings.
 
+pip is present on the box (`pip 21.3.1`, user-local install under
+`/software/WYLD/.local/lib/python3.6/site-packages/pip`) but not tied to
+admin rights, so it doesn't change the stdlib-only constraint above.
+Someday it'd be worth writing an install script for this repo's scripts —
+not started.
+
 **Read `rptsched-domain-reference.md` first, in full, before working on any
 cleanup logic.** It is the authoritative source for: `schedlist` file format,
 what counts as an orphan / stale saved template / scheduled-report removal
@@ -84,12 +90,16 @@ catch unrelated pre-existing orphans in the wrong run).
 ## Local data for testing
 
 - `rptsched/` — a local mirror of production `Rptsched/` used for realistic
-  testing. Gitignored (or will be, once this becomes a git repo) — never
-  commit it.
-- `rptsched/schedlist` is the full 5,311-line index; the `.set`/`.selans`/
-  companion files in this directory are a smaller stratified sample (227
-  IDs) built to exercise every combination that matters for cleanup logic
-  (ACQ vs. non-ACQ owner, manual vs. recurring, active vs. inactive).
+  testing. Gitignored — never commit it. Currently a full snapshot of
+  production (`rptsched.tar.gz`, ~1 month old as of 2026-08-27, extracted
+  in place): 5,311-line `schedlist` plus ~12,000 companion `.set`/
+  `.selans`/etc. files, not a curated subset. The three integration test
+  suites (`tests/test_remove_*_integration.py`) skip themselves via
+  `unittest.skipUnless` when this directory is absent, and re-extracting a
+  fresh snapshot may shift dataset-dependent expected values baked into
+  those tests (e.g. the known orphan count in
+  `test_remove_orphans_integration.py`) — check those after refreshing the
+  snapshot.
 
 ## Specs
 

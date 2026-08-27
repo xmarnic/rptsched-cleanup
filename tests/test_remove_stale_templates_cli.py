@@ -116,6 +116,41 @@ class TestExecute(unittest.TestCase):
             self.assertEqual(schedlist_lines, [STALE_LINE])
             self.assertTrue((data_dir / "wxyz.set").exists())
 
+    def test_exclude_owner_precise_excludes_exact_match_only(self):
+        with TemporaryDirectory() as tmp:
+            acq1_line = "aaaa|noverdue|ACQ1 Template|n|200207021051|202001010000|ACQ1||||||0|3||0|$<library_notice:c>|ENGLISH|"
+            acq10_line = "bbbb|noverdue|ACQ10 Template|n|200207021051|202001010000|ACQ10||||||0|3||0|$<library_notice:c>|ENGLISH|"
+            data_dir = make_data_dir(tmp, [acq1_line, acq10_line], ["aaaa.set", "bbbb.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--exclude-owner", "ACQ1",
+                ])
+
+            self.assertNotIn("aaaa", out.getvalue())
+            self.assertIn("bbbb", out.getvalue())
+
+    def test_exclude_owner_regex_matches_broadly(self):
+        with TemporaryDirectory() as tmp:
+            acqhq_line = "aaaa|noverdue|ACQHQ Template|n|200207021051|202001010000|ACQHQ||||||0|3||0|$<library_notice:c>|ENGLISH|"
+            data_dir = make_data_dir(tmp, [acqhq_line], ["aaaa.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--exclude-owner-regex", "acq",
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("0 stale template", out.getvalue())
+
     def test_years_override_changes_candidate_set(self):
         with TemporaryDirectory() as tmp:
             # last_run ~1.5 years before "now" — not stale at years=3, stale at years=1
