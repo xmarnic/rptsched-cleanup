@@ -1,0 +1,169 @@
+.TH REMOVE_STALE_TEMPLATES 1 "2026-08-26" "rptsched-cleanup" "rptsched-cleanup Manual"
+.SH NAME
+remove_stale_templates.py \- quarantine stale manual saved templates and prune their schedlist lines
+.SH SYNOPSIS
+.B remove_stale_templates.py
+.B \-\-data\-dir
+.I DIR
+.B \-\-quarantine\-dir
+.I DIR
+[\fB\-\-years\fR \fIN\fR]
+[\fB\-\-execute\fR | \fB\-\-restore\fR \fIRUN_DIR\fR]
+.SH DESCRIPTION
+.B remove_stale_templates.py
+finds
+.I "stale saved templates"
+in a Symphony ILS report\-scheduler data directory (\fIrptsched\fR) and
+moves their files into quarantine, removing the corresponding line from
+.IR schedlist .
+
+A saved template (one row of \fIschedlist\fR, plus its \fI<id>.set\fR /
+\fI<id>.selans\fR file group) is a stale\-template candidate when
+.B all
+of the following hold:
+.RS
+.IP \(bu 2
+.B frequency_flag
+is \fBn\fR \- the template is manual (run by hand only), not on a
+recurring Symphony schedule.
+.IP \(bu 2
+.B owner
+does not contain the substring \fBACQ\fR, case\-insensitive (the ACQ
+exclusion \- Acquisitions\-owned templates are never a candidate,
+regardless of activity).
+.IP \(bu 2
+It satisfies the
+.B inactivity rule:
+.B last_run
+is not the "never run" sentinel (\fB0000000000\fR) and is at least
+\fB\-\-years\fR years before today; or, if the template has never been
+run, \fBcreated\fR is at least \fB\-\-years\fR years before today.
+.RE
+.PP
+Unlike orphans, every stale\-template candidate has a live \fIschedlist\fR
+line. This tool removes that line \- via write\-temp\-file plus atomic
+rename, never an in\-place edit \- so nothing is left dangling. Restoring
+a run re\-inserts the exact removed lines back into the \fIcurrent\fR
+schedlist.
+.SH OPTIONS
+.TP
+.BR \-\-data\-dir " " \fIDIR\fR
+Path to the \fIrptsched\fR data directory to scan and modify. Required in
+every mode, including \fB\-\-restore\fR.
+.TP
+.BR \-\-quarantine\-dir " " \fIDIR\fR
+Path to the quarantine directory that holds run subfolders. Created if it
+does not already exist. Required in every mode.
+.TP
+.BR \-\-years " " \fIN\fR
+Inactivity threshold in years, applied to both \fBlast_run\fR and, when
+the template has never run, \fBcreated\fR. Default: \fB3\fR.
+.TP
+.B \-\-execute
+Perform the move and the \fIschedlist\fR rewrite. Without this flag the
+script runs in dry\-run mode and writes nothing.
+.TP
+.BR \-\-restore " " \fIRUN_DIR\fR
+Reverse a previous \fB\-\-execute\fR run: restore quarantined files, then
+re\-insert their removed \fIschedlist\fR lines. Mutually exclusive with
+\fB\-\-execute\fR.
+.SH MODES
+.SS Dry run (default)
+Prints the count of stale\-template candidates and total files, then one
+line per candidate: id, description, owner, frequency_flag, created,
+last_run, and its file list. Nothing on disk is touched.
+.SS Execute
+With \fB\-\-execute\fR, the script:
+.RS
+.IP 1. 4
+Finds candidates as described above. If none are found, prints a message
+and exits 0 without creating a run subfolder.
+.IP 2. 4
+Creates \fB\-\-quarantine\-dir\fR/templates_\fITIMESTAMP\fR and moves each
+candidate's file group into it, writing \fImanifest.csv\fR (same
+mechanics and partial\-failure behavior as \fBremove_orphans.py\fR(1)).
+.IP 3. 4
+Writes the exact removed \fIschedlist\fR lines, verbatim and in id order,
+to \fIremoved_schedlist_lines.txt\fR in the run subfolder.
+.IP 4. 4
+Rewrites \fIschedlist\fR to drop those lines, via a temp file plus atomic
+rename.
+.RE
+.IP
+Steps 3 and 4 only run after every file in step 2 has been moved
+successfully; a move failure aborts before \fIschedlist\fR is touched,
+so a failed run never produces a dangling \fIschedlist\fR line.
+.SS Restore
+With \fB\-\-restore\fR \fIRUN_DIR\fR, the script:
+.RS
+.IP 1. 4
+Restores quarantined files exactly as \fBremove_orphans.py\fR(1)'s
+\fB\-\-restore\fR does: idempotent, resumable, skips rows whose
+\fIdest_path\fR no longer exists, aborts on a \fIsource_path\fR
+collision.
+.IP 2. 4
+Reads \fIRUN_DIR\fR/removed_schedlist_lines.txt (if present \- an empty
+result is treated as "no lines to reinsert", not an error) and re\-inserts
+each line into the \fBcurrent\fR schedlist, then re\-sorts the file by id.
+.RE
+.IP
+The re\-insert step is idempotent independently of the file\-restore step:
+it skips any line whose id is already present in the current schedlist,
+so it is safe even if the current schedlist has legitimate edits made
+after the original removal run, and safe to re\-run.
+.SH EXIT STATUS
+.TP
+.B 0
+Success \- including a clean dry run, an execute run that found zero
+candidates, or a restore that skipped everything because it was already
+complete.
+.TP
+.B 1
+A move, schedlist rewrite, or restore operation failed. Details are
+printed to stderr.
+.SH FILES
+.TP
+.I <data\-dir>/schedlist
+Read to find candidates; rewritten in place (atomically) by
+\fB\-\-execute\fR to drop matched lines, and again by \fB\-\-restore\fR to
+re\-insert them.
+.TP
+.I <quarantine\-dir>/templates_<timestamp>/manifest.csv
+File\-move record, same format as \fBremove_orphans.py\fR(1).
+.TP
+.I <quarantine\-dir>/templates_<timestamp>/removed_schedlist_lines.txt
+The exact \fIschedlist\fR lines removed by this run, one per line,
+verbatim. Never deleted \- required for \fB\-\-restore\fR and doubles as
+an audit record.
+.SH EXAMPLES
+.TP
+Preview stale templates using the default 3\-year threshold:
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine
+.TP
+Use a 5\-year threshold instead:
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-years 5
+.TP
+Execute a run:
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-execute
+.TP
+Undo a specific run (files and schedlist lines both):
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-restore ./quarantine/templates_20260826_140501
+.SH SEE ALSO
+.BR remove_orphans.py (1),
+.BR sync_operator_field.py (1)
+
+Domain reference: \fIrptsched\-domain\-reference.md\fR in the
+rptsched\-cleanup repository \- see "Inactivity rule" and "ACQ exclusion"
+under "Definitions", and the \fIschedlist\fR field table.
+.SH CAVEATS
+Requires Python 3.6.8, standard library only.
+
+The \fB\-\-years\fR value must match between the run that removed a
+template and any later reasoning about it; restore replays the exact
+removed line rather than re\-evaluating staleness, so it is unaffected by
+a later change to \fB\-\-years\fR.
+
+This tool only ever considers manual templates (\fBfrequency_flag ==
+"n"\fR). Recurring\-schedule templates are the separate, not\-yet\-built
+"scheduled report removal candidates" category described in the
+project's CLAUDE.md.
