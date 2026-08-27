@@ -8,9 +8,6 @@ import remove_orphans
 import remove_stale_templates
 import sync_operator_field
 
-DATA_DIR = Path("/software/WYLD/Unicorn/Rptsched/")
-QUARANTINE_DIR = Path("/software/WYLD/Nic/Scripts/rptsched-cleanup/quarantine/")
-
 SCRIPTS = [
     ("remove_orphans", lambda argv: remove_orphans.main(argv)),
     ("remove_stale_templates", lambda argv: remove_stale_templates.main(argv)),
@@ -33,17 +30,37 @@ class Tee:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run remove_orphans, remove_stale_templates, and sync_operator_field "
-                     "in sequence against the production Rptsched directory."
+        description="Run remove_orphans, remove_stale_templates, and sync_operator_field in sequence."
     )
+    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--quarantine-dir", required=True, type=Path)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument(
+        "--exclude-owner", action="append", default=[], metavar="OWNER",
+        help="Forwarded only to remove_stale_templates: exclude templates whose owner "
+             "exactly matches OWNER (case-insensitive). Repeatable.",
+    )
+    parser.add_argument(
+        "--exclude-owner-regex", action="append", default=[], metavar="PATTERN",
+        help="Forwarded only to remove_stale_templates: exclude templates whose owner "
+             "matches regex PATTERN (case-insensitive). Repeatable.",
+    )
     return parser
 
 
-def _build_argv(execute):
-    argv = ["--data-dir", str(DATA_DIR), "--quarantine-dir", str(QUARANTINE_DIR)]
+def _build_argv(data_dir, quarantine_dir, execute):
+    argv = ["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)]
     if execute:
         argv.append("--execute")
+    return argv
+
+
+def _build_template_argv(base_argv, exclude_owners, exclude_owner_regexes):
+    argv = list(base_argv)
+    for owner in exclude_owners:
+        argv.extend(["--exclude-owner", owner])
+    for pattern in exclude_owner_regexes:
+        argv.extend(["--exclude-owner-regex", pattern])
     return argv
 
 
@@ -51,10 +68,16 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
+    args.quarantine_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = QUARANTINE_DIR / "run_{}.log".format(timestamp)
-    script_argv = _build_argv(args.execute)
+    log_path = args.quarantine_dir / "run_{}.log".format(timestamp)
+
+    base_argv = _build_argv(args.data_dir, args.quarantine_dir, args.execute)
+    script_argvs = {
+        "remove_orphans": base_argv,
+        "remove_stale_templates": _build_template_argv(base_argv, args.exclude_owner, args.exclude_owner_regex),
+        "sync_operator_field": base_argv,
+    }
 
     with log_path.open("w") as log_file:
         real_stdout = sys.stdout
@@ -64,7 +87,7 @@ def main(argv=None) -> int:
         try:
             for name, script_main in SCRIPTS:
                 print("=== {} ===".format(name))
-                exit_code = script_main(script_argv)
+                exit_code = script_main(script_argvs[name])
                 print("=== {} exit code: {} ===".format(name, exit_code))
                 if exit_code != 0:
                     print("Stopping: {} failed with exit code {}".format(name, exit_code))

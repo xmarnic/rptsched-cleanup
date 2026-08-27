@@ -30,8 +30,6 @@ class TestRunAllBase(unittest.TestCase):
             return operators_code
 
         patches = [
-            patch.object(run_all, "DATA_DIR", data_dir),
-            patch.object(run_all, "QUARANTINE_DIR", quarantine_dir),
             patch.object(run_all.remove_orphans, "main", side_effect=fake_orphans),
             patch.object(run_all.remove_stale_templates, "main", side_effect=fake_templates),
             patch.object(run_all.sync_operator_field, "main", side_effect=fake_operators),
@@ -48,7 +46,7 @@ class TestRunAll(TestRunAllBase):
         with TemporaryDirectory() as tmp:
             data_dir, quarantine_dir, calls = self._patch_all(tmp)
 
-            exit_code = run_all.main([])
+            exit_code = run_all.main(["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertEqual([name for name, _ in calls], ["orphans", "templates", "operators"])
@@ -60,18 +58,44 @@ class TestRunAll(TestRunAllBase):
         with TemporaryDirectory() as tmp:
             data_dir, quarantine_dir, calls = self._patch_all(tmp)
 
-            exit_code = run_all.main(["--execute"])
+            exit_code = run_all.main([
+                "--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir), "--execute",
+            ])
 
             self.assertEqual(exit_code, 0)
             expected_argv = ["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir), "--execute"]
             for _, argv in calls:
                 self.assertEqual(argv, expected_argv)
 
+    def test_exclude_owner_flags_forwarded_only_to_templates(self):
+        with TemporaryDirectory() as tmp:
+            data_dir, quarantine_dir, calls = self._patch_all(tmp)
+
+            exit_code = run_all.main([
+                "--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir),
+                "--exclude-owner", "ACQ1",
+                "--exclude-owner-regex", "acq",
+            ])
+
+            self.assertEqual(exit_code, 0)
+            calls_by_name = dict(calls)
+            base_argv = ["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)]
+            self.assertEqual(calls_by_name["orphans"], base_argv)
+            self.assertEqual(calls_by_name["operators"], base_argv)
+            self.assertEqual(
+                calls_by_name["templates"],
+                base_argv + ["--exclude-owner", "ACQ1", "--exclude-owner-regex", "acq"],
+            )
+
+    def test_missing_required_args_errors(self):
+        with self.assertRaises(SystemExit):
+            run_all.main([])
+
     def test_stops_after_first_failure(self):
         with TemporaryDirectory() as tmp:
             data_dir, quarantine_dir, calls = self._patch_all(tmp, templates_code=1)
 
-            exit_code = run_all.main([])
+            exit_code = run_all.main(["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)])
 
             self.assertEqual(exit_code, 1)
             self.assertEqual([name for name, _ in calls], ["orphans", "templates"])
@@ -80,7 +104,7 @@ class TestRunAll(TestRunAllBase):
         with TemporaryDirectory() as tmp:
             data_dir, quarantine_dir, calls = self._patch_all(tmp, orphans_code=2)
 
-            exit_code = run_all.main([])
+            exit_code = run_all.main(["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)])
 
             self.assertEqual(exit_code, 2)
             self.assertEqual([name for name, _ in calls], ["orphans"])
@@ -89,7 +113,7 @@ class TestRunAll(TestRunAllBase):
         with TemporaryDirectory() as tmp:
             data_dir, quarantine_dir, calls = self._patch_all(tmp)
 
-            run_all.main([])
+            run_all.main(["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)])
 
             log_files = list(quarantine_dir.glob("run_*.log"))
             self.assertEqual(len(log_files), 1)
@@ -103,7 +127,7 @@ class TestRunAll(TestRunAllBase):
             data_dir, quarantine_dir, calls = self._patch_all(tmp)
             self.assertFalse(quarantine_dir.exists())
 
-            run_all.main([])
+            run_all.main(["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)])
 
             self.assertTrue(quarantine_dir.is_dir())
 
@@ -111,7 +135,7 @@ class TestRunAll(TestRunAllBase):
         with TemporaryDirectory() as tmp:
             data_dir, quarantine_dir, calls = self._patch_all(tmp)
 
-            exit_code = run_all.main([])
+            exit_code = run_all.main(["--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir)])
 
             self.assertEqual(exit_code, 0)
             log_files = list(quarantine_dir.glob("run_*.log"))
