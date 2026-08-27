@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rptsched_lib.templates import find_stale_template_candidates
+from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates
 from rptsched_lib.schedlist import remove_lines, insert_lines
 from rptsched_lib.quarantine import (
     QuarantineMoveError,
@@ -83,7 +83,9 @@ def main(argv=None) -> int:
     total_files = sum(len(c.filenames) for c in candidates.values())
 
     if not args.execute:
-        print("DRY RUN: {} stale template(s), {} file(s) would be moved".format(len(candidates), total_files))
+        total_manual = count_manual_templates(args.data_dir)
+        print("DRY RUN: {} stale template(s) out of {} manual template(s) total, {} file(s) would be moved".format(
+            len(candidates), total_manual, total_files))
         for template_id in sorted(candidates):
             c = candidates[template_id]
             print("  {}: {} | owner={} | freq={} | created={} | last_run={} | files={}".format(

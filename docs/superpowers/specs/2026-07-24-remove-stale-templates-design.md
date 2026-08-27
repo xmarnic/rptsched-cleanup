@@ -65,8 +65,10 @@ of the following hold:
 
 ### 1. Dry-run (default — no flag)
 
-Scans `schedlist`, applies candidate selection, and prints a summary to
-the console: each candidate's id, description, owner, frequency_flag,
+Scans `schedlist`, applies candidate selection, and prints a summary line
+— stale-candidate count, total manual-template count in `schedlist`
+(regardless of staleness or owner exclusion), and file count — followed
+by each candidate's id, description, owner, frequency_flag,
 last_run/created, and its files on disk. **Nothing is written or
 moved** — no quarantine subfolder, no manifest, no changes to
 `schedlist` or `--data-dir`.

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from tempfile import TemporaryDirectory
 
-from rptsched_lib.templates import find_stale_template_candidates
+from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates
 from tests.fixtures import make_data_dir
 
 TODAY = datetime(2026, 7, 24)
@@ -144,6 +144,37 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
             candidates = find_stale_template_candidates(data_dir)  # no today= override
 
             self.assertEqual(set(candidates.keys()), {"abcd"})
+
+
+class TestCountManualTemplates(unittest.TestCase):
+    def test_counts_only_manual_frequency_flag(self):
+        with TemporaryDirectory() as tmp:
+            lines = [
+                _line("aaaa", frequency_flag="n"),
+                _line("bbbb", frequency_flag="w1"),
+                _line("cccc", frequency_flag="n"),
+            ]
+            data_dir = make_data_dir(tmp, lines, [])
+
+            self.assertEqual(count_manual_templates(data_dir), 2)
+
+    def test_ignores_staleness_and_owner(self):
+        with TemporaryDirectory() as tmp:
+            # active (not stale) and ACQ-owned, but still manual -> both counted
+            lines = [
+                _line("aaaa", owner="ACQ", last_run="202601010000"),
+                _line("bbbb", owner="SOMEMGR", last_run="202001010000"),
+            ]
+            data_dir = make_data_dir(tmp, lines, [])
+
+            self.assertEqual(count_manual_templates(data_dir), 2)
+
+    def test_zero_when_no_manual_templates(self):
+        with TemporaryDirectory() as tmp:
+            lines = [_line("aaaa", frequency_flag="w1")]
+            data_dir = make_data_dir(tmp, lines, [])
+
+            self.assertEqual(count_manual_templates(data_dir), 0)
 
 
 if __name__ == "__main__":

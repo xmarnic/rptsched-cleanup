@@ -48,6 +48,20 @@ def _is_excluded_owner(owner, exclude_owners, exclude_owner_regexes):
     return any(regex.search(owner) for regex in exclude_owner_regexes)
 
 
+def count_manual_templates(data_dir):
+    data_dir = Path(data_dir)
+    count = 0
+    with (data_dir / "schedlist").open() as f:
+        for line in f:
+            raw_line = line.rstrip("\n")
+            if not raw_line.strip():
+                continue
+            fields = raw_line.split("|")
+            if fields[3] == "n":
+                count += 1
+    return count
+
+
 def find_stale_template_candidates(data_dir, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
     data_dir = Path(data_dir)
     if today is None:

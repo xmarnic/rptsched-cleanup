@@ -85,9 +85,11 @@ re\-insert their removed \fIschedlist\fR lines. Mutually exclusive with
 \fB\-\-execute\fR.
 .SH MODES
 .SS Dry run (default)
-Prints the count of stale\-template candidates and total files, then one
-line per candidate: id, description, owner, frequency_flag, created,
-last_run, and its file list. Nothing on disk is touched.
+Prints the count of stale\-template candidates, the total count of manual
+templates in \fIschedlist\fR (regardless of staleness or owner exclusion),
+and total files, then one line per candidate: id, description, owner,
+frequency_flag, created, last_run, and its file list. Nothing on disk is
+touched.
 .SS Execute
 With \fB\-\-execute\fR, the script:
 .RS
