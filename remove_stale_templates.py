@@ -6,6 +6,8 @@ from pathlib import Path
 
 from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates, years_before
 from rptsched_lib.activity_index import build_activity_index
+from rptsched_lib.report_log import find_log_files
+from rptsched_lib.hist_log import find_hist_files
 from rptsched_lib.schedlist import remove_lines, insert_lines
 from rptsched_lib.quarantine import (
     QuarantineMoveError,
@@ -91,6 +93,30 @@ def main(argv=None) -> int:
 
     today = datetime.now()
     threshold = years_before(today, args.years)
+
+    # A wrong/unmounted/mistyped log path silently glob()s to nothing
+    # rather than erroring -- with no files found, the activity index
+    # would come back empty and every manual template would look
+    # unconditionally stale. That's the same failure shape as the
+    # incident this redesign exists to fix, just from a bad path instead
+    # of a bad field. Refuse to proceed rather than risk it silently.
+    if not find_log_files(args.logs_report_dir, since=threshold):
+        print(
+            "No files found under --logs-report-dir ({}) within the last {} years. "
+            "Refusing to proceed -- this would silently make every manual template "
+            "look inactive. Check the path.".format(args.logs_report_dir, args.years),
+            file=sys.stderr,
+        )
+        return 1
+    if not find_hist_files(args.logs_hist_dir, since=threshold):
+        print(
+            "No files found under --logs-hist-dir ({}) within the last {} years. "
+            "Refusing to proceed -- this would silently make every manual template "
+            "look inactive. Check the path.".format(args.logs_hist_dir, args.years),
+            file=sys.stderr,
+        )
+        return 1
+
     # Dry-run must write nothing at all (see the design spec's "nothing
     # written" guarantee) -- the cache is only used on --execute, where
     # that constraint doesn't apply and the perf win actually matters.

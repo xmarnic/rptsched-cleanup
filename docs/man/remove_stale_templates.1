@@ -185,8 +185,11 @@ candidates, or a restore that skipped everything because it was already
 complete.
 .TP
 .B 1
-A move, schedlist rewrite, or restore operation failed. Details are
-printed to stderr.
+A move, schedlist rewrite, or restore operation failed; or
+\fB\-\-logs\-report\-dir\fR/\fB\-\-logs\-hist\-dir\fR contains zero files
+within \fB\-\-years\fR (refused rather than silently treating every
+manual template as inactive \- likely a wrong or unmounted path).
+Details are printed to stderr.
 .SH FILES
 .TP
 .I <data\-dir>/schedlist

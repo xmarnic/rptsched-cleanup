@@ -16,22 +16,29 @@ ACTIVE_LINE = "abcd|noverdue|Active Template|n|200207021051|202001010000|SOMEMGR
 
 def _make_log_dirs(tmp, active_report_types_and_descriptions=()):
     """
-    Build empty --logs-report-dir/--logs-hist-dir, optionally with a
-    Logs/Report/ "Finished report" line (timestamped "now", so it's
-    always within the default 3yr window regardless of when tests run)
-    for each (report_type, description) pair that should read as active.
+    Build --logs-report-dir/--logs-hist-dir, with a Logs/Report/
+    "Finished report" line (timestamped "now", so it's always within the
+    default 3yr window regardless of when tests run) for each
+    (report_type, description) pair that should read as active.
+
+    Always creates at least an empty placeholder file in each directory
+    -- remove_stale_templates.py refuses to run against a log directory
+    with zero files at all within the window (a wrong/unmounted path
+    would otherwise silently look identical to "nothing is active"), and
+    an empty file is enough to satisfy that check without asserting any
+    activity.
     """
     report_dir = Path(tmp) / "Report"
     hist_dir = Path(tmp) / "Hist"
     report_dir.mkdir()
     hist_dir.mkdir()
 
-    if active_report_types_and_descriptions:
-        now = datetime.now()
-        month_file = report_dir / (now.strftime("%Y%m") + ".log")
-        with month_file.open("w") as f:
-            for report_type, description in active_report_types_and_descriptions:
-                f.write('{} Finished report {}:"{}"\n'.format(now.strftime("%Y%m%d%H%M%S"), report_type, description))
+    now = datetime.now()
+    month_file = report_dir / (now.strftime("%Y%m") + ".log")
+    with month_file.open("w") as f:
+        for report_type, description in active_report_types_and_descriptions:
+            f.write('{} Finished report {}:"{}"\n'.format(now.strftime("%Y%m%d%H%M%S"), report_type, description))
+    (hist_dir / (now.strftime("%Y%m") + ".hist")).touch()
 
     return report_dir, hist_dir
 
@@ -78,6 +85,72 @@ class TestDryRun(unittest.TestCase):
                         "--data-dir", str(data_dir),
                         "--quarantine-dir", str(quarantine_dir),
                     ])
+
+    def test_empty_logs_report_dir_refuses_to_run(self):
+        # A wrong/unmounted --logs-report-dir globs to zero files rather
+        # than erroring on its own -- must be caught explicitly, since
+        # the alternative is silently treating every manual template as
+        # inactive (the same failure shape as the original incident).
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+            empty_report_dir = Path(tmp) / "EmptyReport"
+            empty_report_dir.mkdir()
+            _, hist_dir = _make_log_dirs(tmp)
+
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                exit_code = remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(empty_report_dir),
+                    "--logs-hist-dir", str(hist_dir),
+                ])
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn(str(empty_report_dir), err.getvalue())
+
+    def test_empty_logs_hist_dir_refuses_to_run(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, _ = _make_log_dirs(tmp)
+            empty_hist_dir = Path(tmp) / "EmptyHist"
+            empty_hist_dir.mkdir()
+
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                exit_code = remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(empty_hist_dir),
+                ])
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn(str(empty_hist_dir), err.getvalue())
+
+    def test_nonexistent_logs_dir_refuses_to_run_same_as_empty(self):
+        # A typo'd path that doesn't exist at all behaves identically to
+        # an existing-but-empty one (Path.glob on a missing dir just
+        # yields nothing) -- confirm that's caught too, not just the
+        # exists-but-empty case.
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+            _, hist_dir = _make_log_dirs(tmp)
+            nonexistent_report_dir = Path(tmp) / "does_not_exist_at_all"
+
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                exit_code = remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(nonexistent_report_dir),
+                    "--logs-hist-dir", str(hist_dir),
+                ])
+
+            self.assertEqual(exit_code, 1)
 
 
 class TestExecute(unittest.TestCase):

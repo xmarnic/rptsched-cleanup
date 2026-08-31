@@ -15,11 +15,18 @@ SAMPLE_DATA_DIR = REPO_ROOT / "rptsched"
 LOGS_REPORT_DIR = REPO_ROOT / "logs" / "Report"
 # logprint/translate (needed to decode Logs/Hist/) are Symphony-specific
 # utilities that only exist on the production server -- not available on
-# this dev machine. Point at an empty dir here rather than the real
-# logs/Hist/ pull, which would try to shell out to a missing binary.
-# hist_log.py's own tests already cover the decode pipeline against a
-# real recorded sample (decoded-hist-log.txt).
+# this dev machine. Point at a dir with no real activity here rather than
+# the real logs/Hist/ pull, which would try to shell out to a missing
+# binary. hist_log.py's own tests already cover the decode pipeline
+# against a real recorded sample (decoded-hist-log.txt).
+# A placeholder file (empty is fine) has to actually exist in it --
+# remove_stale_templates.py refuses to run against a log dir with zero
+# files at all within the window, to catch a wrong/unmounted path rather
+# than silently treating it as "nothing is active."
 EMPTY_HIST_DIR = REPO_ROOT / "logs" / "_empty_hist_for_tests"
+if LOGS_REPORT_DIR.is_dir():
+    EMPTY_HIST_DIR.mkdir(exist_ok=True)
+    (EMPTY_HIST_DIR / (datetime.now().strftime("%Y%m") + ".hist")).touch()
 
 
 @unittest.skipUnless(
