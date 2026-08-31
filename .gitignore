@@ -4,3 +4,4 @@ rptsched_sample/
 quarantine/
 __pycache__/
 logs/
+decoded-hist-log.txt
