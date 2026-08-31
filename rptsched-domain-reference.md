@@ -34,16 +34,41 @@ interpretation:
 | 1 | report_type | Symphony report type code |
 | 2 | description | Human-entered title/description |
 | 3 | frequency_flag | See below |
-| 4 | created | `YYYYMMDDHHMM` |
+| 4 | created | `YYYYMMDDHHMM` — see caveat below for scheduled/recurring rows |
 | 5 | last_run | `YYYYMMDDHHMM`, or `0000000000` sentinel meaning "never run" |
 | 6 | owner | Staff username/ID that owns the template |
 
 
-**frequency_flag** distinguishes two kinds of saved template:
+**frequency_flag** distinguishes several kinds of saved template:
 
 - `n` — saved but only ever run manually. Not on a recurring schedule.
-- `d1`, `w1`-`w7`, `m1`-`m31` — genuinely on a recurring schedule (daily,
-  a specific weekday, or a specific day of the month).
+- `d1`, `w1`-`w7`, `m1`-`m31` (also seen combined, e.g. `w2,3,4,5,6,7`) —
+  genuinely on a recurring schedule (daily, a specific weekday, or a
+  specific day of the month).
+- `o` — confirmed via direct test-server observation: a genuine one-time
+  "run once" schedule (Symphony's Setup and Schedule screen has this as a
+  distinct option from both a recurring schedule and an immediate Run
+  Now). Scheduling a one-time run creates a **new** `schedlist` row under
+  a fresh id, rather than updating the template it was scheduled from;
+  the original row is untouched.
+- `p<N>` (e.g. `p2`, `p14`, `p90`, `p91`, `p92`, `p182`, `p365`) — seen in
+  production but not yet confirmed by direct test; presumed "every N
+  days" given the pattern of values, by analogy with `d1`/`w*`/`m*`.
+
+**Field 4 ("created") caveat for scheduled/recurring rows**: for every
+row with a scheduled `frequency_flag` (recurring or `o`), field 4 is
+**not** a fixed one-time creation timestamp — confirmed by checking the
+full `rptsched/` dataset: 100% of non-`"n"` rows with a real `last_run`
+have `last_run` *before* field 4, across every single recurring flag
+value with no exceptions. That's the schedule engine advancing field 4 to
+the *next* scheduled fire time each time the item runs, not a bug or a
+field-mapping error. For manual (`"n"`) templates specifically, field 4
+stays a genuine one-time creation stamp as described above — only 0.6%
+of `"n"` rows show the same before-`last_run` pattern (noise-level,
+consistent with the field meaning what this doc says for that category).
+This matters because it means field 4 should be read as "created" only
+for `"n"` rows; for anything scheduled, read it as "next/last scheduled
+occurrence" instead.
 
 ## Definitions
 

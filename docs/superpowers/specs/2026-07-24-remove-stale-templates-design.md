@@ -123,10 +123,15 @@ than insert a duplicate; a schedlist id must stay unique. Otherwise insert
 it. This is a targeted re-insertion into the current file, not a blind
 overwrite with a backup copy — the current file may have legitimate edits
 made since the removal run (e.g. new templates added by staff), and
-restore must not discard those. After inserting, re-sort the whole file
-by id (report codes are sequential-ish, e.g. `aaaa`, `aaab`, ... `zzzz`,
-so an id sort reconstructs the original ordering). Write via the same
-temp-file + atomic-rename approach as `--execute`.
+restore must not discard those. After inserting, place each restored line
+at the position matching its `created` timestamp among the surrounding
+lines, without disturbing the relative order of any line that wasn't
+touched — `schedlist`'s real on-disk order is chronological by `created`
+(append order), not alphabetical by id. (An earlier version of this spec
+assumed id order; confirmed wrong and fixed via a local execute→restore
+round-trip test — see CLAUDE.md and
+`docs/testing/2026-08-31-run-behavior-test-procedure.md`.) Write via the
+same temp-file + atomic-rename approach as `--execute`.
 
 `manifest.csv` and `removed_schedlist_lines.txt` are never deleted,
 during or after restore. Once phase 1 completes, the run subfolder is

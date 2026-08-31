@@ -1,3 +1,4 @@
+import bisect
 import os
 import shutil
 import tempfile
@@ -49,6 +50,7 @@ def insert_lines(data_dir, lines_to_insert) -> dict:
 
     current_lines = _read_lines(schedlist_path)
     current_ids = {line.split("|")[0] for line in current_lines}
+    current_keys = [line.split("|")[4] for line in current_lines]
 
     inserted = 0
     skipped = 0
@@ -57,10 +59,12 @@ def insert_lines(data_dir, lines_to_insert) -> dict:
         if template_id in current_ids:
             skipped += 1
             continue
-        current_lines.append(raw_line)
+        key = raw_line.split("|")[4]
+        idx = bisect.bisect_right(current_keys, key)
+        current_lines.insert(idx, raw_line)
+        current_keys.insert(idx, key)
         current_ids.add(template_id)
         inserted += 1
 
-    current_lines.sort(key=lambda line: line.split("|")[0])
     _atomic_write(schedlist_path, current_lines)
     return {"inserted": inserted, "skipped": skipped}

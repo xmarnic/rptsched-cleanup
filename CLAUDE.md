@@ -72,10 +72,17 @@ otherwise dangle. It saves the exact removed lines verbatim
 (`removed_schedlist_lines.txt`, also never deleted) so `--restore` can,
 *after* the file-restore phase completes, re-insert them into the
 *current* `schedlist` (not blindly overwrite it, since it may have
-legitimate edits made after the removal run) and re-sort by id to restore
-original ordering. That re-insert step is itself idempotent — it skips
-any line whose id is already present in the current schedlist — since a
-schedlist id must stay unique even if a restore is retried.
+legitimate edits made after the removal run) and insert each one at the
+position matching its `created` timestamp, without disturbing the
+relative order of any line that wasn't touched — `schedlist`'s real
+on-disk order is append/chronological (by `created`), not alphabetical by
+id. (A prior version of this logic wrongly re-sorted the whole file by id
+on every restore — confirmed and fixed via a local execute→restore
+round-trip test against `rptsched/`, see
+`docs/testing/2026-08-31-run-behavior-test-procedure.md` for how it was
+found.) That re-insert step is itself idempotent — it skips any line
+whose id is already present in the current schedlist — since a schedlist
+id must stay unique even if a restore is retried.
 
 The move/manifest/restore mechanics (given a data-dir, quarantine-dir, a
 run-name prefix, and a set of target ids: create the run subfolder, move
