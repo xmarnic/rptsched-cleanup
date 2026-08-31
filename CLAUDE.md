@@ -40,8 +40,14 @@ Three independent removal categories, each gets its own spec and script:
 1. **Orphans** — `<id>.*` file groups with no `schedlist` line. Spec done:
    `docs/superpowers/specs/2026-07-24-remove-orphans-design.md`.
 2. **Stale saved templates** — manual (`frequency_flag == "n"`) templates
-   that are inactive per the inactivity rule. Spec done:
-   `docs/superpowers/specs/2026-07-24-remove-stale-templates-design.md`.
+   with no activity found in `Logs/Report/` or `Logs/Hist/` within
+   `--years`. Original spec (modes/quarantine/restore mechanics, still
+   current): `docs/superpowers/specs/2026-07-24-remove-stale-templates-design.md`.
+   Candidate-selection logic in that spec is superseded — `schedlist`'s
+   own `last_run`/`created` fields turned out not to carry a usage
+   signal for manual templates (confirmed empirically after a production
+   incident); see `docs/superpowers/specs/2026-08-31-remove-stale-templates-log-based-redesign.md`
+   for what replaced it.
 3. **Scheduled report removal candidates** — recurring-schedule templates
    that are inactive per the inactivity rule. **Parked** — see note below.
 

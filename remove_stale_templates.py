@@ -4,7 +4,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates
+from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates, years_before
+from rptsched_lib.activity_index import build_activity_index
 from rptsched_lib.schedlist import remove_lines, insert_lines
 from rptsched_lib.quarantine import (
     QuarantineMoveError,
@@ -15,6 +16,8 @@ from rptsched_lib.quarantine import (
     restore_run,
 )
 
+INDEX_CACHE_FILENAME = "activity_index_cache.json"
+
 REMOVED_LINES_FILENAME = "removed_schedlist_lines.txt"
 
 
@@ -24,6 +27,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--quarantine-dir", required=True, type=Path)
+    # Not argparse-required: --restore never touches these, so it shouldn't
+    # need to name them. Enforced as required for dry-run/--execute in main().
+    parser.add_argument("--logs-report-dir", type=Path, default=None)
+    parser.add_argument("--logs-hist-dir", type=Path, default=None)
+    parser.add_argument(
+        "--index-cache-path", type=Path, default=None,
+        help="Where to persist the activity-index cache. Defaults to a file under --quarantine-dir.",
+    )
     parser.add_argument("--years", type=int, default=3)
     parser.add_argument(
         "--exclude-owner", action="append", default=[], metavar="OWNER",
@@ -75,8 +86,24 @@ def main(argv=None) -> int:
             schedlist_result["inserted"], schedlist_result["skipped"]))
         return 0
 
+    if args.logs_report_dir is None or args.logs_hist_dir is None:
+        parser.error("--logs-report-dir and --logs-hist-dir are required (except with --restore)")
+
+    today = datetime.now()
+    threshold = years_before(today, args.years)
+    # Dry-run must write nothing at all (see the design spec's "nothing
+    # written" guarantee) -- the cache is only used on --execute, where
+    # that constraint doesn't apply and the perf win actually matters.
+    if args.execute:
+        index_cache_path = args.index_cache_path or (args.quarantine_dir / INDEX_CACHE_FILENAME)
+    else:
+        index_cache_path = None
+    activity_index = build_activity_index(
+        args.logs_report_dir, args.logs_hist_dir, since=threshold, cache_path=index_cache_path,
+    )
+
     candidates = find_stale_template_candidates(
-        args.data_dir, years=args.years,
+        args.data_dir, activity_index, years=args.years, today=today,
         exclude_owners=args.exclude_owner,
         exclude_owner_regexes=args.exclude_owner_regex,
     )
@@ -88,8 +115,11 @@ def main(argv=None) -> int:
             len(candidates), total_manual, total_files))
         for template_id in sorted(candidates):
             c = candidates[template_id]
-            print("  {}: {} | owner={} | freq={} | created={} | last_run={} | files={}".format(
-                c.id, c.description, c.owner, c.frequency_flag, c.created, c.last_run,
+            # last_run is deliberately not shown -- it's not part of the
+            # decision anymore and displaying it invites the exact
+            # misreading that caused the original production incident.
+            print("  {}: {} | report_type={} | owner={} | freq={} | created={} | files={}".format(
+                c.id, c.description, c.report_type, c.owner, c.frequency_flag, c.created,
                 ", ".join(c.filenames)))
         return 0
 

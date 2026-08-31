@@ -11,7 +11,29 @@ from rptsched_lib.quarantine import read_manifest
 from tests.fixtures import make_data_dir
 
 STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
-ACTIVE_LINE = "abcd|noverdue|Active Template|n|200207021051|202601010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
+ACTIVE_LINE = "abcd|noverdue|Active Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
+
+
+def _make_log_dirs(tmp, active_report_types_and_descriptions=()):
+    """
+    Build empty --logs-report-dir/--logs-hist-dir, optionally with a
+    Logs/Report/ "Finished report" line (timestamped "now", so it's
+    always within the default 3yr window regardless of when tests run)
+    for each (report_type, description) pair that should read as active.
+    """
+    report_dir = Path(tmp) / "Report"
+    hist_dir = Path(tmp) / "Hist"
+    report_dir.mkdir()
+    hist_dir.mkdir()
+
+    if active_report_types_and_descriptions:
+        now = datetime.now()
+        month_file = report_dir / (now.strftime("%Y%m") + ".log")
+        with month_file.open("w") as f:
+            for report_type, description in active_report_types_and_descriptions:
+                f.write('{} Finished report {}:"{}"\n'.format(now.strftime("%Y%m%d%H%M%S"), report_type, description))
+
+    return report_dir, hist_dir
 
 
 class TestDryRun(unittest.TestCase):
@@ -19,17 +41,22 @@ class TestDryRun(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                 ])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("wxyz", out.getvalue())
             self.assertNotIn("abcd", out.getvalue())
+            # dry-run writes nothing at all, not even the activity-index
+            # cache -- quarantine_dir must not be created
             self.assertFalse(quarantine_dir.exists())
             self.assertTrue((data_dir / "wxyz.set").exists())
             schedlist_text = (data_dir / "schedlist").read_text()
@@ -40,18 +67,33 @@ class TestDryRun(unittest.TestCase):
         with self.assertRaises(SystemExit):
             remove_stale_templates.main([])
 
+    def test_missing_log_dirs_errors_outside_restore(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            quarantine_dir = Path(tmp) / "quarantine"
+
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    remove_stale_templates.main([
+                        "--data-dir", str(data_dir),
+                        "--quarantine-dir", str(quarantine_dir),
+                    ])
+
 
 class TestExecute(unittest.TestCase):
     def test_execute_moves_files_writes_manifest_and_rewrites_schedlist(self):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--execute",
                 ])
 
@@ -77,6 +119,7 @@ class TestExecute(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [ACTIVE_LINE], ["abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             schedlist_bytes_before = (data_dir / "schedlist").read_bytes()
 
             out = io.StringIO()
@@ -84,6 +127,8 @@ class TestExecute(unittest.TestCase):
                 exit_code = remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--execute",
                 ])
 
@@ -92,13 +137,18 @@ class TestExecute(unittest.TestCase):
             schedlist_lines = (data_dir / "schedlist").read_text().splitlines()
             self.assertEqual(schedlist_lines, [ACTIVE_LINE])
             self.assertEqual((data_dir / "schedlist").read_bytes(), schedlist_bytes_before)
-            self.assertFalse(quarantine_dir.exists())
+            # --execute is allowed side effects (unlike dry-run) -- building
+            # the activity index cache may create quarantine_dir even with
+            # zero candidates, but no run subfolder should exist since
+            # nothing was actually quarantined.
+            self.assertEqual(list(quarantine_dir.glob("templates_*")), [])
             self.assertIn("no stale template", out.getvalue().lower())
 
     def test_execute_aborts_before_schedlist_rewrite_on_move_failure(self):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             with patch("rptsched_lib.quarantine.shutil.move", side_effect=OSError("simulated failure")):
                 err = io.StringIO()
@@ -106,6 +156,8 @@ class TestExecute(unittest.TestCase):
                     exit_code = remove_stale_templates.main([
                         "--data-dir", str(data_dir),
                         "--quarantine-dir", str(quarantine_dir),
+                        "--logs-report-dir", str(report_dir),
+                        "--logs-hist-dir", str(hist_dir),
                         "--execute",
                     ])
 
@@ -122,12 +174,15 @@ class TestExecute(unittest.TestCase):
             acq10_line = "bbbb|noverdue|ACQ10 Template|n|200207021051|202001010000|ACQ10||||||0|3||0|$<library_notice:c>|ENGLISH|"
             data_dir = make_data_dir(tmp, [acq1_line, acq10_line], ["aaaa.set", "bbbb.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             out = io.StringIO()
             with redirect_stdout(out):
                 remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--exclude-owner", "ACQ1",
                 ])
 
@@ -139,12 +194,15 @@ class TestExecute(unittest.TestCase):
             acqhq_line = "aaaa|noverdue|ACQHQ Template|n|200207021051|202001010000|ACQHQ||||||0|3||0|$<library_notice:c>|ENGLISH|"
             data_dir = make_data_dir(tmp, [acqhq_line], ["aaaa.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--exclude-owner-regex", "acq",
                 ])
 
@@ -153,19 +211,35 @@ class TestExecute(unittest.TestCase):
 
     def test_years_override_changes_candidate_set(self):
         with TemporaryDirectory() as tmp:
-            # last_run ~1.5 years before "now" — not stale at years=3, stale at years=1
-            recent_but_old_line = "mmmm|noverdue|Middling|n|200207021051|202501010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
+            # created 2yr before "now": protected by the recency floor at
+            # years=3, a candidate at years=1. No log activity either way
+            # -- isolates the --years-sensitive recency-floor path.
+            two_years_ago = datetime.now().replace(year=datetime.now().year - 2)
+            created = two_years_ago.strftime("%Y%m%d%H%M")
+            recent_but_old_line = "mmmm|noverdue|Middling|n|{}|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|".format(created)
             data_dir = make_data_dir(tmp, [recent_but_old_line], ["mmmm.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             out = io.StringIO()
             with redirect_stdout(out):
                 remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
+                ])
+            self.assertNotIn("mmmm", out.getvalue())
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                remove_stale_templates.main([
+                    "--data-dir", str(data_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--years", "1",
                 ])
-
             self.assertIn("mmmm", out.getvalue())
 
 
@@ -174,11 +248,14 @@ class TestRestore(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
 
             with redirect_stdout(io.StringIO()):
                 remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--execute",
                 ])
 
@@ -205,11 +282,14 @@ class TestRestore(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             with redirect_stdout(io.StringIO()):
                 remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--execute",
                 ])
             run_dir = list(quarantine_dir.glob("templates_*"))[0]
@@ -239,12 +319,15 @@ class TestRestore(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             with patch("rptsched_lib.quarantine.shutil.move", side_effect=OSError("simulated failure")):
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     exit_code = remove_stale_templates.main([
                         "--data-dir", str(data_dir),
                         "--quarantine-dir", str(quarantine_dir),
+                        "--logs-report-dir", str(report_dir),
+                        "--logs-hist-dir", str(hist_dir),
                         "--execute",
                     ])
             self.assertEqual(exit_code, 1)
@@ -269,11 +352,14 @@ class TestRestore(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
 
             with redirect_stdout(io.StringIO()):
                 remove_stale_templates.main([
                     "--data-dir", str(data_dir),
                     "--quarantine-dir", str(quarantine_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
                     "--execute",
                 ])
             run_dir = list(quarantine_dir.glob("templates_*"))[0]
