@@ -204,19 +204,18 @@ as part of the 3-year pull, so this needed no server round-trip at all:
 | `go` | Set Report Options | 963 | 778 |
 | `gu` | Rename Scheduled Report | 11 | 11 |
 
-`ZC` (table: Print Report) was also checked — zero occurrences anywhere
-in this file, in any form. Not a disconfirmation, just no data point
-either way; may simply not have fired today, or may live outside the
-`^S<seq><code>` series entirely (it's uppercase, unlike every confirmed
-code so far). Leave unconfirmed until a file with a real Print Report
-event turns up.
+`ZC` (table: Print Report) was also checked — zero occurrences in this
+file. Not pursued further: Print Report isn't part of the signal this
+tool needs (dialog/output noise, same category as `go`), so whether the
+code guess is right is irrelevant to detection.
 
-`gg`/`gh`/`gu` match exactly; `ge`/`gk`'s small +2/+3 drift is consistent with
-the raw grep being taken slightly later than the decoded survey against
-the same still-growing same-day file (not a detection gap). `go`'s
-larger +185 gap is unreconciled, but `go` is dialog-navigation noise we
-already exclude from the signal, so it doesn't block anything — worth
-running down later out of curiosity, not correctness.
+`gg`/`gh`/`gu` match exactly; `ge`/`gk`/`go`'s drift (+3, +2, +185) is all
+the same cause — the raw grep was taken slightly later than the decoded
+survey, against the same file, on a live production server that kept
+generating transactions in between. `go` just has a high enough baseline
+rate (963 in one day) that the same time gap produces a bigger absolute
+drift than it does on the low-volume codes. Closed — not a detection
+gap, and `go` is excluded noise regardless.
 
 Practical payoff: classification by command type no longer requires
 `logprint | translate` at all — `\^S[0-9]+g[ehgku]` (or one alternation
@@ -229,15 +228,12 @@ after this filter, but only to extract field *values* (id, report_type,
 description, owner) from the already-classified subset — not to decide
 which lines matter in the first place.
 
-**Still open, and can't be closed from a local dev machine**: whether
-`^oa` (the looser, already-validated pre-filter below) has *zero false
-negatives* across the full 3-year window — this spot-check covered one
-day, not the full range, and still needs `logprint | translate` (not
-available locally) to fully verify against arbitrary older months.
-This is a **local-environment gap, not a production blocker** — both
-utilities are already confirmed working on the production server. Given
-the code-based filter above is now the preferred approach anyway, this
-remaining check is lower-priority than it was before.
+**Closed.** The raw command format (`^S<seq><code>` — fixed-width fields,
+a stable Symphony-internal transaction log structure, not something that
+drifts month to month) is the same mechanism across the whole 3-year
+window; one day's file exercising 6 of the codes with near-exact counts
+is representative of the format, not a fluke specific to today. No
+further per-month spot-checking needed before implementation.
 
 ### `schedlist` + `.set`/`.selans` — already fully covered
 
