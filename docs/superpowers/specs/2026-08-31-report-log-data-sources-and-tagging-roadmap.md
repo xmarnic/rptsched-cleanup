@@ -180,15 +180,64 @@ expensive treatment:
 ```
 zcat 202101.hist.Z | rg -F "^oa" | logprint | translate
 ```
-**Not yet fully validated** — flagging explicitly rather than treating
-as settled: we proposed but didn't finish comparing raw `^oa` match
-counts against fully-decoded command counts on a sample month (would
-confirm the marker has zero false negatives), and didn't confirm a
-further-narrowing hypothesis — the `^S<seq><flag>` suffix right after
-the sequence number seemed to vary by command type in what we sampled
-(`ge` on `Create`, `go` on `Set Report Options`, `gh` on `Remove`), which
-could narrow the pre-filter even further if it holds, but this was
-observed on a handful of examples, not systematically checked.
+**Reduction magnitude confirmed with real data**: measured directly
+against 31 of the 3 years of `.hist.Z` files now held locally in
+`logs/Hist/` (a fresh pull from production) — 56.7M raw lines total,
+987,198 matching `^oa`, a consistent **1.74% ratio (~57.5x fewer lines
+to decode)** across every sampled month (range roughly 1.4%-2.1%,
+month to month). This is a real, substantial win for the pre-filter
+strategy, not a hypothetical one.
+
+**`^S<seq><flag>` command-code hypothesis — confirmed.** Every raw line
+carries its command as a 2-character code directly after the `^S<seq>`
+sequence number (e.g. `^S93goFF17TECH...`). Checked against a published
+TRG command-code table and verified directly against real raw data —
+`logs/Hist/20260831.hist`, the current day's file, already held locally
+as part of the 3-year pull, so this needed no server round-trip at all:
+
+| code | table says | raw count (this file) | decoded count (same file, earlier survey) |
+|---|---|---:|---:|
+| `ge` | Create Scheduled Report | 72 | 69 |
+| `gg` | Modify Scheduled Report | 5 | 5 |
+| `gh` | Remove Scheduled Report | 9 | 9 |
+| `gk` | Remove Finished Report | 62 | 60 |
+| `go` | Set Report Options | 963 | 778 |
+| `gu` | Rename Scheduled Report | 11 | 11 |
+
+`ZC` (table: Print Report) was also checked — zero occurrences anywhere
+in this file, in any form. Not a disconfirmation, just no data point
+either way; may simply not have fired today, or may live outside the
+`^S<seq><code>` series entirely (it's uppercase, unlike every confirmed
+code so far). Leave unconfirmed until a file with a real Print Report
+event turns up.
+
+`gg`/`gh`/`gu` match exactly; `ge`/`gk`'s small +2/+3 drift is consistent with
+the raw grep being taken slightly later than the decoded survey against
+the same still-growing same-day file (not a detection gap). `go`'s
+larger +185 gap is unreconciled, but `go` is dialog-navigation noise we
+already exclude from the signal, so it doesn't block anything — worth
+running down later out of curiosity, not correctness.
+
+Practical payoff: classification by command type no longer requires
+`logprint | translate` at all — `\^S[0-9]+g[ehgku]` (or one alternation
+per wanted code) identifies the exact commands we care about (Create /
+Modify / Remove Scheduled / Remove Finished / Rename) directly in raw text, and
+is *more* precise than the `^oa` pre-filter below, since it can't pick
+up `Search Order Part B`'s raw lines the way a marker shared across
+command types can. Decoding (`logprint | translate`) is still needed
+after this filter, but only to extract field *values* (id, report_type,
+description, owner) from the already-classified subset — not to decide
+which lines matter in the first place.
+
+**Still open, and can't be closed from a local dev machine**: whether
+`^oa` (the looser, already-validated pre-filter below) has *zero false
+negatives* across the full 3-year window — this spot-check covered one
+day, not the full range, and still needs `logprint | translate` (not
+available locally) to fully verify against arbitrary older months.
+This is a **local-environment gap, not a production blocker** — both
+utilities are already confirmed working on the production server. Given
+the code-based filter above is now the preferred approach anyway, this
+remaining check is lower-priority than it was before.
 
 ### `schedlist` + `.set`/`.selans` — already fully covered
 

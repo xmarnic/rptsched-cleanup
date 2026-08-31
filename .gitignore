@@ -3,3 +3,4 @@ rptsched.tar.gz
 rptsched_sample/
 quarantine/
 __pycache__/
+logs/
