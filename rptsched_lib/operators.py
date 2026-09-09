@@ -1,8 +1,8 @@
-import csv
 from collections import namedtuple
 from pathlib import Path
 
 from rptsched_lib.atomic import atomic_write
+from rptsched_lib.quarantine import read_manifest, write_manifest
 
 OperatorMismatch = namedtuple("OperatorMismatch", ["id", "old_operator", "new_operator"])
 SkippedId = namedtuple("SkippedId", ["id", "reason"])
@@ -82,36 +82,18 @@ def rewrite_operator(data_dir, template_id, new_value):
 
 
 MANIFEST_FIELDS = ["id", "old_operator", "new_operator"]
-MANIFEST_FILENAME = "manifest.csv"
 
 
 class OperatorRewriteError(RuntimeError):
     pass
 
 
-class InvalidManifestError(RuntimeError):
-    pass
-
-
 def write_operator_manifest(run_dir, rows):
-    manifest_path = Path(run_dir) / MANIFEST_FILENAME
-    with manifest_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-    return manifest_path
+    return write_manifest(run_dir, rows, fieldnames=MANIFEST_FIELDS)
 
 
 def read_operator_manifest(run_dir):
-    manifest_path = Path(run_dir) / MANIFEST_FILENAME
-    with manifest_path.open("r", newline="") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames != MANIFEST_FIELDS:
-            raise InvalidManifestError(
-                "manifest at {} is not a sync_operator_field run (unexpected columns)".format(manifest_path)
-            )
-        return [dict(row) for row in reader]
+    return read_manifest(run_dir, fieldnames=MANIFEST_FIELDS)
 
 
 def apply_mismatches(data_dir, run_dir, mismatches):

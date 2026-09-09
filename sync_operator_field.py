@@ -11,9 +11,8 @@ from rptsched_lib.operators import (
     rewrite_operator,
     read_operator_manifest,
     OperatorRewriteError,
-    InvalidManifestError,
 )
-from rptsched_lib.quarantine import make_run_dir
+from rptsched_lib.quarantine import InvalidManifestError, make_run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

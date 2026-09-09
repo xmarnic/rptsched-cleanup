@@ -4,7 +4,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from rptsched_lib.quarantine import make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine, QuarantineMoveError, restore_run, QuarantineRestoreError
+from rptsched_lib.quarantine import (
+    make_run_dir, write_manifest, read_manifest, MANIFEST_FIELDS, move_groups_to_quarantine,
+    QuarantineMoveError, restore_run, QuarantineRestoreError, InvalidManifestError,
+)
 
 
 class TestMakeRunDir(unittest.TestCase):
@@ -53,6 +56,25 @@ class TestManifestRoundTrip(unittest.TestCase):
             MANIFEST_FIELDS,
             ["id", "filename", "extension", "source_path", "dest_path", "moved_at"],
         )
+
+    def test_write_and_read_accept_custom_fieldnames(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+            custom_fields = ["id", "old_value", "new_value"]
+            rows = [{"id": "abcd", "old_value": "OLD", "new_value": "NEW"}]
+
+            write_manifest(run_dir, rows, fieldnames=custom_fields)
+
+            self.assertEqual(read_manifest(run_dir, fieldnames=custom_fields), rows)
+
+    def test_read_raises_on_column_mismatch(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+            write_manifest(run_dir, [{"id": "abcd", "old_value": "OLD", "new_value": "NEW"}],
+                            fieldnames=["id", "old_value", "new_value"])
+
+            with self.assertRaises(InvalidManifestError):
+                read_manifest(run_dir)
 
 
 class TestMoveGroupsSuccess(unittest.TestCase):

@@ -15,6 +15,10 @@ class QuarantineRestoreError(RuntimeError):
     pass
 
 
+class InvalidManifestError(RuntimeError):
+    pass
+
+
 def make_run_dir(quarantine_dir: Path, prefix: str, timestamp: str) -> Path:
     quarantine_dir = Path(quarantine_dir)
     quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -24,20 +28,25 @@ def make_run_dir(quarantine_dir: Path, prefix: str, timestamp: str) -> Path:
     return run_dir
 
 
-def write_manifest(run_dir: Path, rows) -> Path:
+def write_manifest(run_dir: Path, rows, fieldnames=MANIFEST_FIELDS) -> Path:
     manifest_path = Path(run_dir) / MANIFEST_FILENAME
     with manifest_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
     return manifest_path
 
 
-def read_manifest(run_dir: Path):
+def read_manifest(run_dir: Path, fieldnames=MANIFEST_FIELDS):
     manifest_path = Path(run_dir) / MANIFEST_FILENAME
     with manifest_path.open("r", newline="") as f:
         reader = csv.DictReader(f)
+        if reader.fieldnames != fieldnames:
+            raise InvalidManifestError(
+                "manifest at {} does not match expected columns {} (found {})".format(
+                    manifest_path, fieldnames, reader.fieldnames)
+            )
         return [dict(row) for row in reader]
 
 
