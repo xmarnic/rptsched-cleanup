@@ -114,6 +114,33 @@ class TestExecute(unittest.TestCase):
             self.assertIn("no longer a stale candidate", err.getvalue())
             self.assertTrue((rptsched_dir / "wxyz.set").exists())
 
+    def test_exclude_report_source_flag_participates_in_fresh_redetect(self):
+        # A reviewed file that was captured without --exclude-report-source
+        # but executed with it should abort, exactly like any other
+        # drift between review and execute -- proving the flag actually
+        # feeds the pre-mutation re-detect, not just the initial detect.
+        with TemporaryDirectory() as tmp:
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
+            quarantine_dir = Path(tmp) / "quarantine"
+            report_dir, hist_dir = _make_log_dirs(tmp)
+            reviewed_file = _reviewed_file_for(tmp, "wxyz", STALE_LINE, ["wxyz.set", "wxyz.selans"])
+
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                exit_code = execute_stale_templates.main([
+                    "--rptsched-dir", str(rptsched_dir),
+                    "--quarantine-dir", str(quarantine_dir),
+                    "--candidates-file", str(reviewed_file),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
+                    "--exclude-report-source", "noverdue",
+                ])
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("no longer a stale candidate", err.getvalue())
+            self.assertTrue((rptsched_dir / "wxyz.set").exists())
+            self.assertFalse(quarantine_dir.exists())
+
     def test_ignores_new_candidate_not_in_reviewed_file(self):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(

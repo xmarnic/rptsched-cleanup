@@ -52,6 +52,25 @@ class TestBareDetect(unittest.TestCase):
             # bare mode must not touch rptsched-dir at all
             self.assertTrue((rptsched_dir / "wxyz.set").exists())
 
+    def test_exclude_report_source_flag_is_forwarded_to_detect(self):
+        with TemporaryDirectory() as tmp:
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
+            report_dir, hist_dir = _make_log_dirs(tmp)
+            data_dir = Path(tmp) / "work"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = quarantine_stale_templates.main([
+                    "--rptsched-dir", str(rptsched_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
+                    "--data-dir", str(data_dir),
+                    "--exclude-report-source", "noverdue",
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("0 candidate(s) detected", out.getvalue())
+
 
 class TestReportFlag(unittest.TestCase):
     def test_prints_full_report(self):

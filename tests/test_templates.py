@@ -110,6 +110,65 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
 
             self.assertEqual(set(candidates.keys()), {"efgh"})
 
+    def test_no_report_source_exclusions_by_default(self):
+        with TemporaryDirectory() as tmp:
+            lines = [_line("abcd", report_source="noverdue")]
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
+
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY)
+
+            self.assertEqual(set(candidates.keys()), {"abcd"})
+
+    def test_exclude_report_sources_is_exact_match_case_insensitive(self):
+        with TemporaryDirectory() as tmp:
+            lines = [
+                _line("abcd", report_source="NoVerdue"),
+                _line("efgh", report_source="NOVERDUE"),
+            ]
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set", "efgh.set"])
+
+            candidates = find_stale_template_candidates(
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_report_sources=["noverdue"],
+            )
+
+            self.assertEqual(candidates, {})
+
+    def test_exclude_report_sources_does_not_match_as_substring(self):
+        with TemporaryDirectory() as tmp:
+            lines = [_line("abcd", report_source="noverdue2")]
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
+
+            candidates = find_stale_template_candidates(
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_report_sources=["noverdue"],
+            )
+
+            self.assertEqual(set(candidates.keys()), {"abcd"})
+
+    def test_exclude_report_source_regexes_matches_as_unanchored_substring(self):
+        with TemporaryDirectory() as tmp:
+            lines = [_line("abcd", report_source="statsreport")]
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
+
+            candidates = find_stale_template_candidates(
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_report_source_regexes=["stats"],
+            )
+
+            self.assertEqual(candidates, {})
+
+    def test_exclude_report_source_regexes_respects_anchors(self):
+        with TemporaryDirectory() as tmp:
+            lines = [
+                _line("abcd", report_source="statsreport"),
+                _line("efgh", report_source="liststats"),
+            ]
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set", "efgh.set"])
+
+            candidates = find_stale_template_candidates(
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_report_source_regexes=["^stats"],
+            )
+
+            self.assertEqual(set(candidates.keys()), {"efgh"})
+
     def test_report_index_match_excludes_regardless_of_owner(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]

@@ -53,6 +53,14 @@ def build_parser():
         "--exclude-owner-regex", action="append", default=[], metavar="PATTERN",
         help="Exclude templates whose owner matches regex PATTERN (case-insensitive, unanchored search). Repeatable.",
     )
+    parser.add_argument(
+        "--exclude-report-source", action="append", default=[], metavar="REPORT_SOURCE",
+        help="Exclude templates whose report_source exactly matches REPORT_SOURCE (case-insensitive). Repeatable.",
+    )
+    parser.add_argument(
+        "--exclude-report-source-regex", action="append", default=[], metavar="PATTERN",
+        help="Exclude templates whose report_source matches regex PATTERN (case-insensitive, unanchored search). Repeatable.",
+    )
     return parser
 
 
@@ -70,6 +78,8 @@ def main(argv=None):
                 data_copy, args.logs_report_dir, args.logs_hist_dir,
                 years=args.years, today=today,
                 exclude_owners=args.exclude_owner, exclude_owner_regexes=args.exclude_owner_regex,
+                exclude_report_sources=args.exclude_report_source,
+                exclude_report_source_regexes=args.exclude_report_source_regex,
                 index_cache_path=args.index_cache_path,
             )
         except EmptyLogDirectoryError as err:

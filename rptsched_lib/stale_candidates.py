@@ -48,7 +48,9 @@ def build_index(logs_report_dir, logs_hist_dir, years=3, today=None, index_cache
 
 def detect_stale_templates(
     rptsched_dir, logs_report_dir, logs_hist_dir, years=3, today=None,
-    exclude_owners=(), exclude_owner_regexes=(), index_cache_path=None,
+    exclude_owners=(), exclude_owner_regexes=(),
+    exclude_report_sources=(), exclude_report_source_regexes=(),
+    index_cache_path=None,
 ):
     """
     The copy-free core of stale-template detection: builds the activity
@@ -75,4 +77,5 @@ def detect_stale_templates(
     return find_stale_template_candidates(
         rptsched_dir, activity_index, years=years, today=today,
         exclude_owners=exclude_owners, exclude_owner_regexes=exclude_owner_regexes,
+        exclude_report_sources=exclude_report_sources, exclude_report_source_regexes=exclude_report_source_regexes,
     )

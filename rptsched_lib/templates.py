@@ -41,11 +41,18 @@ def _group_files_by_id(rptsched_dir: Path):
     return groups
 
 
-def _is_excluded_owner(owner, exclude_owners, exclude_owner_regexes):
-    owner_lower = owner.lower()
-    if any(owner_lower == pattern.lower() for pattern in exclude_owners):
+def is_value_excluded(value, exact_values, compiled_regexes):
+    """
+    Shared by owner and report_source exclusion alike (and by
+    report_stale_templates.py's own active-population recompute, so that
+    stays consistent with what detection actually excluded): exact match
+    is case-insensitive, regex match is unanchored re.search against
+    compiled_regexes (caller compiles with re.IGNORECASE).
+    """
+    value_lower = value.lower()
+    if any(value_lower == candidate.lower() for candidate in exact_values):
         return True
-    return any(regex.search(owner) for regex in exclude_owner_regexes)
+    return any(regex.search(value) for regex in compiled_regexes)
 
 
 def count_manual_templates(rptsched_dir):
@@ -62,12 +69,17 @@ def count_manual_templates(rptsched_dir):
     return count
 
 
-def find_stale_template_candidates(rptsched_dir, activity_index, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
+def find_stale_template_candidates(
+    rptsched_dir, activity_index, years=3, today=None,
+    exclude_owners=(), exclude_owner_regexes=(),
+    exclude_report_sources=(), exclude_report_source_regexes=(),
+):
     rptsched_dir = Path(rptsched_dir)
     if today is None:
         today = datetime.now()
     threshold = years_before(today, years)
-    compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
+    compiled_owner_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
+    compiled_report_source_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_report_source_regexes]
 
     file_groups = _group_files_by_id(rptsched_dir)
 
@@ -85,7 +97,9 @@ def find_stale_template_candidates(rptsched_dir, activity_index, years=3, today=
 
             if frequency_flag != "n":
                 continue
-            if _is_excluded_owner(owner, exclude_owners, compiled_regexes):
+            if is_value_excluded(owner, exclude_owners, compiled_owner_regexes):
+                continue
+            if is_value_excluded(report_source, exclude_report_sources, compiled_report_source_regexes):
                 continue
             if is_active(activity_index, report_source, description, owner):
                 continue

@@ -73,6 +73,8 @@ def build_parser():
     parser.add_argument("--years", type=int, default=3)
     parser.add_argument("--exclude-owner", action="append", default=[], metavar="OWNER")
     parser.add_argument("--exclude-owner-regex", action="append", default=[], metavar="PATTERN")
+    parser.add_argument("--exclude-report-source", action="append", default=[], metavar="REPORT_SOURCE")
+    parser.add_argument("--exclude-report-source-regex", action="append", default=[], metavar="PATTERN")
     parser.add_argument(
         "--data-dir", type=Path, default=DEFAULT_DATA_DIR,
         help="Holds candidates.jsonl and the activity-index cache. Persistent by default ({}), "
@@ -92,6 +94,10 @@ def _exclude_argv(args):
         argv += ["--exclude-owner", owner]
     for pattern in args.exclude_owner_regex:
         argv += ["--exclude-owner-regex", pattern]
+    for report_source in args.exclude_report_source:
+        argv += ["--exclude-report-source", report_source]
+    for pattern in args.exclude_report_source_regex:
+        argv += ["--exclude-report-source-regex", pattern]
     return argv
 
 

@@ -38,12 +38,20 @@ Both required as CLI arguments, never hardcoded:
   case-insensitive, unanchored `re.search`. Breadth is the caller's
   responsibility via regex syntax (e.g. `ACQ` matches anywhere in the
   owner, `^ACQ` matches only owners starting with it).
+- `--exclude-report-source REPORT_SOURCE` (optional, repeatable) —
+  exclude templates whose `report_source` field is an exact,
+  case-insensitive match for `REPORT_SOURCE`. Same exact-match semantics
+  as `--exclude-owner`, just against a different field.
+- `--exclude-report-source-regex PATTERN` (optional, repeatable) —
+  exclude templates whose `report_source` field matches regex `PATTERN`
+  via case-insensitive, unanchored `re.search`. Same semantics as
+  `--exclude-owner-regex`, just against a different field.
 
-Neither flag has a built-in default — this tool ships with zero owner
-exclusions unless a caller passes one. Any site-specific default (e.g.
-WYLD excluding all ACQ-owned templates via `--exclude-owner-regex ACQ`)
-lives in that site's own invocation/wrapper, not in this script or the
-shared library.
+None of the four exclusion flags has a built-in default — this tool
+ships with zero exclusions of either kind unless a caller passes one.
+Any site-specific default (e.g. WYLD excluding all ACQ-owned templates
+via `--exclude-owner-regex ACQ`) lives in that site's own
+invocation/wrapper, not in this script or the shared library.
 
 ## Candidate selection
 
@@ -58,6 +66,9 @@ of the following hold:
 3. `owner` is not excluded by any `--exclude-owner` (exact match) or
    `--exclude-owner-regex` (regex match) entry passed on the command
    line.
+4. `report_source` is not excluded by any `--exclude-report-source`
+   (exact match) or `--exclude-report-source-regex` (regex match) entry
+   passed on the command line.
 
 "Today" is the script's run date.
 
@@ -67,7 +78,7 @@ of the following hold:
 
 Scans `schedlist`, applies candidate selection, and prints a summary line
 — stale-candidate count, total manual-template count in `schedlist`
-(regardless of staleness or owner exclusion), and file count — followed
+(regardless of staleness or exclusion), and file count — followed
 by each candidate's id, description, owner, frequency_flag,
 last_run/created, and its files on disk. **Nothing is written or
 moved** — no quarantine subfolder, no manifest, no changes to

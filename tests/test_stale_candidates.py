@@ -63,6 +63,17 @@ class TestDetectStaleTemplates(unittest.TestCase):
             with self.assertRaises(EmptyLogDirectoryError):
                 detect_stale_templates(rptsched_dir, report_dir, empty_hist_dir)
 
+    def test_exclude_report_sources_is_threaded_through(self):
+        with TemporaryDirectory() as tmp:
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            report_dir, hist_dir = _log_dirs_with_placeholder(tmp)
+
+            candidates = detect_stale_templates(
+                rptsched_dir, report_dir, hist_dir, exclude_report_sources=["noverdue"],
+            )
+
+            self.assertEqual(candidates, {})
+
     def test_index_cache_path_persists_across_calls(self):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set"])

@@ -35,8 +35,9 @@ what actually gets moved or written into removed_schedlist_lines.txt.
 schedlist lines from removed_schedlist_lines.txt.
 
 --logs-report-dir/--logs-hist-dir/--years/--exclude-owner/
---exclude-owner-regex must match what was passed to
-detect_stale_templates.py for the reviewed file to diff cleanly.
+--exclude-owner-regex/--exclude-report-source/--exclude-report-source-regex
+must match what was passed to detect_stale_templates.py for the reviewed
+file to diff cleanly.
 --index-cache-path should point at the same shared cache
 build_activity_index_cache.py/detect_stale_templates.py use, so this
 re-detect is normally a cheap incremental update, not a cold rebuild.
@@ -78,6 +79,8 @@ def build_parser():
     parser.add_argument("--years", type=int, default=3)
     parser.add_argument("--exclude-owner", action="append", default=[], metavar="OWNER")
     parser.add_argument("--exclude-owner-regex", action="append", default=[], metavar="PATTERN")
+    parser.add_argument("--exclude-report-source", action="append", default=[], metavar="REPORT_SOURCE")
+    parser.add_argument("--exclude-report-source-regex", action="append", default=[], metavar="PATTERN")
     parser.add_argument("--restore", metavar="RUN_DIR", type=Path, default=None)
     return parser
 
@@ -165,6 +168,8 @@ def main(argv=None) -> int:
             args.rptsched_dir, args.logs_report_dir, args.logs_hist_dir,
             years=args.years, today=today,
             exclude_owners=args.exclude_owner, exclude_owner_regexes=args.exclude_owner_regex,
+            exclude_report_sources=args.exclude_report_source,
+            exclude_report_source_regexes=args.exclude_report_source_regex,
             index_cache_path=args.index_cache_path,
         )
     except EmptyLogDirectoryError as err:

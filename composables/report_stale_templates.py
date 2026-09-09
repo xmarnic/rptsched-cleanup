@@ -24,7 +24,8 @@ counts it as active anyway. Harmless here since this section is
 awareness-only and never feeds into any removal decision -- see
 docs/superpowers/specs/2026-09-09-composable-cli-pipeline-design.md.
 
---exclude-owner/--exclude-owner-regex must match whatever was passed to
+--exclude-owner/--exclude-owner-regex/--exclude-report-source/
+--exclude-report-source-regex must match whatever was passed to
 detect_stale_templates.py, so the active-population complement lines up
 with what was actually excluded during detection.
 
@@ -45,7 +46,7 @@ from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rptsched_lib.cli import run
-from rptsched_lib.templates import count_manual_templates
+from rptsched_lib.templates import count_manual_templates, is_value_excluded
 
 ActiveTemplate = namedtuple("ActiveTemplate", ["id", "report_source", "description", "owner"])
 
@@ -65,6 +66,14 @@ def build_parser():
         "--exclude-owner-regex", action="append", default=[], metavar="PATTERN",
         help="Must match what was passed to detect_stale_templates.py. Repeatable.",
     )
+    parser.add_argument(
+        "--exclude-report-source", action="append", default=[], metavar="REPORT_SOURCE",
+        help="Must match what was passed to detect_stale_templates.py. Repeatable.",
+    )
+    parser.add_argument(
+        "--exclude-report-source-regex", action="append", default=[], metavar="PATTERN",
+        help="Must match what was passed to detect_stale_templates.py. Repeatable.",
+    )
     return parser
 
 
@@ -77,8 +86,13 @@ def _read_candidates(candidates_file):
             lines.close()
 
 
-def _collect_active_manual_templates(rptsched_dir, candidate_ids, exclude_owners, exclude_owner_regexes):
-    compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
+def _collect_active_manual_templates(
+    rptsched_dir, candidate_ids,
+    exclude_owners, exclude_owner_regexes,
+    exclude_report_sources, exclude_report_source_regexes,
+):
+    compiled_owner_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
+    compiled_report_source_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_report_source_regexes]
     templates = []
     with (rptsched_dir / "schedlist").open() as f:
         for line in f:
@@ -93,10 +107,9 @@ def _collect_active_manual_templates(rptsched_dir, candidate_ids, exclude_owners
                 continue
             if template_id in candidate_ids:
                 continue
-            owner_lower = owner.lower()
-            if any(owner_lower == pattern.lower() for pattern in exclude_owners):
+            if is_value_excluded(owner, exclude_owners, compiled_owner_regexes):
                 continue
-            if any(regex.search(owner) for regex in compiled_regexes):
+            if is_value_excluded(report_source, exclude_report_sources, compiled_report_source_regexes):
                 continue
             templates.append(ActiveTemplate(
                 id=template_id, report_source=report_source, description=description, owner=owner,
@@ -195,7 +208,10 @@ def main(argv=None):
         )
         candidate_ids = {c["id"] for c in candidates}
         active_templates = _collect_active_manual_templates(
-            data_copy, candidate_ids, exclude_owners=args.exclude_owner, exclude_owner_regexes=args.exclude_owner_regex,
+            data_copy, candidate_ids,
+            exclude_owners=args.exclude_owner, exclude_owner_regexes=args.exclude_owner_regex,
+            exclude_report_sources=args.exclude_report_source,
+            exclude_report_source_regexes=args.exclude_report_source_regex,
         )
         by_owner_active = {}
         for t in active_templates:

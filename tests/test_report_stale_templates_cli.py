@@ -136,6 +136,23 @@ class TestReportStaleTemplatesCli(unittest.TestCase):
 
             self.assertNotIn("ACQMGR", out.getvalue())
 
+    def test_exclude_report_source_matches_detect_side_and_excludes_from_active_population(self):
+        with TemporaryDirectory() as tmp:
+            excluded_line = "qzqz|liststats|Excluded Source Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|||"
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, excluded_line], ["wxyz.set", "wxyz.selans", "qzqz.set"])
+            candidates_file = Path(tmp) / "candidates.jsonl"
+            candidates_file.write_text(json.dumps(_candidate_record()) + "\n")
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                report_stale_templates.main([
+                    "--rptsched-dir", str(rptsched_dir),
+                    "--candidates-file", str(candidates_file),
+                    "--exclude-report-source", "liststats",
+                ])
+
+            self.assertNotIn("qzqz", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

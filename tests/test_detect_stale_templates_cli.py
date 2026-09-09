@@ -128,6 +128,25 @@ class TestDetectStaleTemplatesCli(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(out.getvalue().strip(), "")
 
+    def test_exclude_report_source_flag_filters_candidates(self):
+        with TemporaryDirectory() as tmp:
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
+            report_dir, hist_dir = _make_log_dirs(tmp)
+            cache_path = Path(tmp) / "cache.json"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = detect_stale_templates.main([
+                    "--rptsched-dir", str(rptsched_dir),
+                    "--logs-report-dir", str(report_dir),
+                    "--logs-hist-dir", str(hist_dir),
+                    "--index-cache-path", str(cache_path),
+                    "--exclude-report-source", "noverdue",
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(out.getvalue().strip(), "")
+
     def test_refuses_empty_logs_report_dir(self):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set"])
