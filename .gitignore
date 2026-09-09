@@ -6,3 +6,4 @@ __pycache__/
 logs/
 decoded-hist-log.txt
 data-analysis/
+schedlist_report_work/
