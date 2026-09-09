@@ -44,9 +44,9 @@ from pathlib import Path
 import detect_operators
 import execute_operators
 import report_operators
-from rptsched_lib.cli import run, unicorn_paths, unicorn_root_default
+from rptsched_lib.cli import default_work_dir, run, unicorn_paths, unicorn_root_default
 
-DEFAULT_WORK_DIR = Path("operators_work")
+DEFAULT_WORK_DIR = default_work_dir("operators")
 CANDIDATES_FILENAME = "candidates.jsonl"
 
 

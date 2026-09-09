@@ -42,9 +42,9 @@ from pathlib import Path
 import detect_orphans
 import execute_orphans
 import report_orphans
-from rptsched_lib.cli import run, unicorn_paths, unicorn_root_default
+from rptsched_lib.cli import default_work_dir, run, unicorn_paths, unicorn_root_default
 
-DEFAULT_WORK_DIR = Path("orphans_work")
+DEFAULT_WORK_DIR = default_work_dir("orphans")
 CANDIDATES_FILENAME = "candidates.jsonl"
 
 

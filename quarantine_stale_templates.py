@@ -52,9 +52,9 @@ from pathlib import Path
 import detect_stale_templates
 import execute_stale_templates
 import report_stale_templates
-from rptsched_lib.cli import run, unicorn_paths, unicorn_root_default
+from rptsched_lib.cli import default_work_dir, run, unicorn_paths, unicorn_root_default
 
-DEFAULT_WORK_DIR = Path("stale_templates_work")
+DEFAULT_WORK_DIR = default_work_dir("stale_templates")
 CANDIDATES_FILENAME = "candidates.jsonl"
 CACHE_FILENAME = "activity_index_cache.json"
 

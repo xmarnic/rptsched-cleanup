@@ -31,6 +31,20 @@ def unicorn_paths(unicorn_root):
     return root / "Rptsched", root / "Logs" / "Report", root / "Logs" / "Hist"
 
 
+def default_work_dir(category):
+    """
+    Home-anchored, not cwd-relative -- a wrapper's --work-dir holds
+    state (the candidates file, plus the activity-index cache for
+    stale-templates) meant to persist between a detect/--report run and
+    a later --execute, potentially days apart. A cwd-relative default
+    would silently point at a different, empty directory every time the
+    tool is re-extracted into a fresh location or just invoked from a
+    different directory -- quietly losing the review state and the
+    cache (forcing a full Logs/Hist/ re-decode) with no error at all.
+    """
+    return Path.home() / ".rptsched-cleanup" / "{}_work".format(category)
+
+
 def run(main_func, argv=None):
     """
     Standard entry point for this project's composable CLI tools. Without
