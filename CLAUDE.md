@@ -5,10 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 Scripts to clean up `rptsched/`, a Symphony ILS (SirsiDynix) report-scheduler
-data directory, in production at `/software/WYLD/Unicorn/Rptsched/`. This repo
-currently contains no implementation code yet — work is in the design/spec
-phase using the `superpowers:brainstorming` → `superpowers:writing-plans`
-workflow.
+data directory, in production at `/software/WYLD/Unicorn/Rptsched/`. Three
+cleanup categories are implemented (orphans, stale saved templates, operator
+sync); a fourth (scheduled report removal candidates) is parked, ideation
+only. New work still generally follows the `superpowers:brainstorming` →
+`superpowers:writing-plans` workflow for anything that changes behavior, not
+just adds a test.
 
 ## Tooling
 
@@ -35,70 +37,139 @@ already fully specified there.
 
 ## Cleanup scope
 
-Three independent removal categories, each gets its own spec and script:
+Four categories. Three are implemented; the fourth is parked.
 
-1. **Orphans** — `<id>.*` file groups with no `schedlist` line. Spec done:
+1. **Orphans** — `<id>.*` file groups with no `schedlist` line. Spec:
    `docs/superpowers/specs/2026-07-24-remove-orphans-design.md`.
 2. **Stale saved templates** — manual (`frequency_flag == "n"`) templates
    with no activity found in `Logs/Report/` or `Logs/Hist/` within
-   `--years`. Original spec (modes/quarantine/restore mechanics, still
-   current): `docs/superpowers/specs/2026-07-24-remove-stale-templates-design.md`.
-   Candidate-selection logic in that spec is superseded — `schedlist`'s
-   own `last_run`/`created` fields turned out not to carry a usage
-   signal for manual templates (confirmed empirically after a production
-   incident); see `docs/superpowers/specs/2026-08-31-remove-stale-templates-log-based-redesign.md`
+   `--years`. Original spec (quarantine/restore mechanics, still current):
+   `docs/superpowers/specs/2026-07-24-remove-stale-templates-design.md`.
+   That spec's candidate-selection logic is superseded — `schedlist`'s own
+   `last_run`/`created` fields turned out not to carry a usage signal for
+   manual templates (confirmed empirically after a production incident);
+   see `docs/superpowers/specs/2026-08-31-remove-stale-templates-log-based-redesign.md`
    for what replaced it.
-3. **Scheduled report removal candidates** — recurring-schedule templates
+3. **Operator sync** — corrects a `.set` file's `operator|` field to match
+   `schedlist`'s owner for that id when they've drifted apart. Spec:
+   `docs/superpowers/specs/2026-07-24-sync-operator-field-design.md`.
+   Doesn't quarantine or delete anything — the only category that mutates
+   a file's contents in place rather than moving it.
+4. **Scheduled report removal candidates** — recurring-schedule templates
    that are inactive per the inactivity rule. **Parked** — see note below.
 
-Each script follows the same interface: `--data-dir` and
-`--quarantine-dir` always passed explicitly (never hardcoded, so a script
-can run against the local `rptsched/` copy before ever touching
-production), dry-run by default (console-only, nothing written), an
-`--execute` mode that moves matching files into a timestamped subfolder
-under quarantine (`orphans_<timestamp>`, `templates_<timestamp>`, etc.)
-plus a `manifest.csv`, and a `--restore <run-subfolder>` mode that
-reverses a run. Quarantine is always a move, never a delete.
+### Tool shape: composable plumbing + a porcelain wrapper per category
 
-`--restore` is **idempotent and resumable**: it moves each manifest row's
-file back from `dest_path` to `source_path`, skipping any row whose
-`dest_path` no longer exists (already restored by an earlier attempt),
-and aborts immediately on an individual failure rather than continuing.
-The run subfolder itself is the status signal — files still present means
-restore is incomplete, and re-running `--restore` on the same subfolder
-is always safe. `manifest.csv` is never deleted, so once a run is fully
-restored (subfolder empty of data files) it still doubles as the
-completeness proof and a permanent audit record.
+Each of the three implemented categories is split into small,
+single-purpose tools connected by a JSONL candidate stream (one JSON
+object per line, one stream per category), plus one coherent wrapper most
+usage should go through day to day. Full rationale and design decisions:
+`docs/superpowers/specs/2026-09-09-composable-cli-pipeline-design.md`.
 
-The stale-templates script (and, presumably, the scheduled-reports script
-once spec'd) additionally rewrites `schedlist` itself — removing candidate
-lines via write-temp-file + atomic-rename, never an in-place edit — since
-those categories, unlike orphans, have a live `schedlist` line that would
-otherwise dangle. It saves the exact removed lines verbatim
-(`removed_schedlist_lines.txt`, also never deleted) so `--restore` can,
-*after* the file-restore phase completes, re-insert them into the
-*current* `schedlist` (not blindly overwrite it, since it may have
-legitimate edits made after the removal run) and insert each one at the
-position matching its `created` timestamp, without disturbing the
-relative order of any line that wasn't touched — `schedlist`'s real
-on-disk order is append/chronological (by `created`), not alphabetical by
-id. (A prior version of this logic wrongly re-sorted the whole file by id
-on every restore — confirmed and fixed via a local execute→restore
-round-trip test against `rptsched/`, see
-`docs/testing/2026-08-31-run-behavior-test-procedure.md` for how it was
-found.) That re-insert step is itself idempotent — it skips any line
-whose id is already present in the current schedlist — since a schedlist
-id must stay unique even if a restore is retried.
+**Plumbing** (`detect_<category>.py` / `report_<category>.py` /
+`execute_<category>.py`, e.g. `detect_stale_templates.py`):
+- `detect_<category>.py` — pure detection. Copies `--data-dir` first
+  (`schedlist` is a single flat-file index for the entire report
+  scheduler — too sensitive to read live from a tool that only needs
+  read access), then emits one JSON record per candidate to stdout.
+  Writes nothing else, except stale-templates' `--index-cache-path` (an
+  explicit, deliberate exception — see below).
+- `report_<category>.py` — reads a JSONL stream (stdin or
+  `--candidates-file`) plus `--data-dir`, prints a human-readable
+  analysis. Never recomputes detection.
+- `execute_<category>.py` — reads a **reviewed** JSONL file via
+  `--candidates-file` (never stdin, since an unreviewed pipe input here
+  would defeat the review gate). Before mutating anything, re-runs
+  detection fresh against **live** `--data-dir` (no copy — it's about to
+  mutate that directory anyway) and diffs it against the reviewed file
+  **per candidate ID, not whole-stream**: a reviewed ID missing from the
+  fresh result, or present with changed identity-defining fields (e.g.
+  stale-templates' `raw_line`), aborts loudly with nothing written; a
+  fresh-only candidate (new since review) is simply ignored — this tool
+  only ever acts on what was reviewed. This is deliberately per-ID: an
+  unrelated `schedlist`/file change between review and execute is the
+  common case on a live production server, not an edge case, and
+  whole-stream equality would abort on it constantly. Also bundles
+  `--restore RUN_DIR`.
+- Stale-templates only: `build_activity_index_cache.py` keeps one shared
+  `--index-cache-path` warm (incremental, mtime-keyed) — point
+  `detect_stale_templates.py` and `execute_stale_templates.py` at the
+  same path so re-verification at execute time is normally a cheap
+  incremental update, not a cold re-decode of `Logs/Hist/`.
 
-The move/manifest/restore mechanics (given a data-dir, quarantine-dir, a
-run-name prefix, and a set of target ids: create the run subfolder, move
-each id's file group, write `manifest.csv`, restore from it idempotently)
-are meant to live in one shared internal module used by all the cleanup
-scripts. Candidate-detection logic and whether/how `schedlist` gets
-touched stay separate per script — scripts must not invoke each other's
-detection logic (e.g. stale-templates must not hand off to orphans'
-"sweep all current orphans" after rewriting schedlist, since that would
-catch unrelated pre-existing orphans in the wrong run).
+**Porcelain** (`quarantine_stale_templates.py`, `quarantine_orphans.py`,
+`sync_operators.py` — the interface most usage should go through):
+one command per category, calling the plumbing tools' real `main(argv)`
+in-process (zero logic duplication, can't drift from what the standalone
+tools do). Named for what `--execute` actually does — "quarantine" for
+the two categories that move files, "sync" for the one that corrects a
+field in place; none of them are named "remove," since nothing is ever
+deleted.
+
+```
+(bare)              detect only — saves candidates into --work-dir, prints a count
+--report             also prints the full human-readable report
+--execute             quarantines/applies using --work-dir's saved candidates file
+--restore RUN_DIR     restores a prior run
+```
+
+`--work-dir` defaults to a persistent per-category directory
+(`stale_templates_work/`, `orphans_work/`, `operators_work/`), holding the
+candidates file and (for stale-templates) the activity-index cache — pass
+it explicitly to control the location. `--execute` deliberately **requires**
+a candidates file already sitting in `--work-dir`; it will not silently
+re-detect first, since skipping straight from a bare invocation to
+`--execute` would skip the review step entirely. (The underlying
+`execute_<category>.py` tool still independently re-verifies against live
+data regardless — the wrapper's requirement is a separate, additional
+gate: you have to have actually looked at a report before the wrapper
+lets you act on it.)
+
+### Safety guarantees, restated for the split
+
+- **Dry-run writes nothing** — true of `detect`/`report`, with one
+  explicit, deliberate exception: `detect_stale_templates.py` writes to
+  `--index-cache-path`. That's disposable derived cache state, not
+  `rptsched/` production data or an audit artifact, so it doesn't violate
+  the spirit of the guarantee — but it does mean "writes nothing" now
+  means "writes nothing to `--data-dir` or `--quarantine-dir`," not
+  literally zero bytes written anywhere.
+- **Quarantine is always a move, never a delete.** Unchanged.
+- **`--restore` is idempotent and resumable**: moves each manifest row's
+  file back from `dest_path` to `source_path`, skipping any row whose
+  `dest_path` no longer exists (already restored), aborting immediately on
+  an individual failure. The run subfolder is the status signal — files
+  still present means restore is incomplete, and re-running `--restore`
+  on the same subfolder is always safe. `manifest.csv` is never deleted.
+- **Schedlist restore preserves creation order, idempotent by id.**
+  `execute_stale_templates.py` saves the exact removed lines verbatim
+  (`removed_schedlist_lines.txt`, sourced from the *fresh re-detection*,
+  never the reviewed file — the reviewed file is authorization for which
+  IDs, never the source of what gets written) so `--restore` can, after
+  the file-restore phase completes, re-insert them into the *current*
+  `schedlist` (not overwrite it — it may have legitimate edits since the
+  removal run) at the position matching each line's `created` timestamp,
+  without disturbing any line that wasn't touched — `schedlist`'s real
+  on-disk order is append/chronological by `created`, not alphabetical by
+  id. Idempotent by id, since a restore might be retried.
+
+### Shared plumbing modules (`rptsched_lib/`)
+
+- `quarantine.py` — `make_run_dir`, `move_groups_to_quarantine`,
+  `restore_run`, plus generalized `write_manifest`/`read_manifest`
+  (parameterized by fieldnames, header-validated on read — raises
+  `InvalidManifestError` on mismatch). Used by every category that
+  quarantines files.
+- `atomic.py` — one shared `atomic_write(path, content)`
+  (mkstemp + conditional copystat + os.replace), replacing what used to
+  be three independently duplicated copies.
+- `cli.py` — `run(main, argv)`, the standard entry point for every CLI
+  tool in this repo; handles `BrokenPipeError` cleanly so piping output
+  into `head`/`less`/another tool doesn't crash with a traceback.
+- Candidate-detection logic stays separate per category — scripts must
+  not invoke each other's detection logic (e.g. stale-templates must not
+  hand off to orphans' "sweep all current orphans," since that would
+  catch unrelated pre-existing orphans in the wrong run).
 
 ## Local data for testing
 
@@ -106,13 +177,13 @@ catch unrelated pre-existing orphans in the wrong run).
   testing. Gitignored — never commit it. Currently a full snapshot of
   production (`rptsched.tar.gz`, ~1 month old as of 2026-08-27, extracted
   in place): 5,311-line `schedlist` plus ~12,000 companion `.set`/
-  `.selans`/etc. files, not a curated subset. The three integration test
-  suites (`tests/test_remove_*_integration.py`) skip themselves via
-  `unittest.skipUnless` when this directory is absent, and re-extracting a
-  fresh snapshot may shift dataset-dependent expected values baked into
-  those tests (e.g. the known orphan count in
-  `test_remove_orphans_integration.py`) — check those after refreshing the
-  snapshot.
+  `.selans`/etc. files, not a curated subset. `tests/test_stale_templates_pipeline_integration.py`
+  skips itself via `unittest.skipUnless` when this directory is absent,
+  and re-extracting a fresh snapshot may shift dataset-dependent expected
+  values baked into it. Orphans and operator-sync don't yet have an
+  equivalent real-data integration suite — only unit-level CLI tests
+  against synthetic fixtures — worth adding if this dataset changes
+  enough to matter.
 
 ## Specs
 
