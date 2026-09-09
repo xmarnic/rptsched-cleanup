@@ -1,5 +1,6 @@
 rptsched/
 rptsched.tar.gz
+rptsched-*.tar.gz
 rptsched_sample/
 quarantine/
 __pycache__/

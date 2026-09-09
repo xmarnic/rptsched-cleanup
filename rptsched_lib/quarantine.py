@@ -24,8 +24,14 @@ def make_run_dir(quarantine_dir: Path, prefix: str, timestamp: str) -> Path:
     quarantine_dir.mkdir(parents=True, exist_ok=True)
 
     run_dir = quarantine_dir / "{}_{}".format(prefix, timestamp)
-    run_dir.mkdir(parents=True, exist_ok=False)
-    return run_dir
+    suffix = 2
+    while True:
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+            return run_dir
+        except FileExistsError:
+            run_dir = quarantine_dir / "{}_{}-{}".format(prefix, timestamp, suffix)
+            suffix += 1
 
 
 def write_manifest(run_dir: Path, rows, fieldnames=MANIFEST_FIELDS) -> Path:

@@ -19,13 +19,17 @@ class TestMakeRunDir(unittest.TestCase):
             self.assertTrue(run_dir.is_dir())
             self.assertEqual(run_dir, quarantine_dir / "orphans_20260724_090000")
 
-    def test_raises_if_run_dir_already_exists(self):
+    def test_disambiguates_when_run_dir_already_exists(self):
         with TemporaryDirectory() as tmp:
             quarantine_dir = Path(tmp) / "quarantine"
-            make_run_dir(quarantine_dir, "orphans", "20260724_090000")
+            first = make_run_dir(quarantine_dir, "orphans", "20260724_090000")
+            second = make_run_dir(quarantine_dir, "orphans", "20260724_090000")
+            third = make_run_dir(quarantine_dir, "orphans", "20260724_090000")
 
-            with self.assertRaises(FileExistsError):
-                make_run_dir(quarantine_dir, "orphans", "20260724_090000")
+            self.assertTrue(second.is_dir())
+            self.assertNotEqual(first, second)
+            self.assertEqual(second, quarantine_dir / "orphans_20260724_090000-2")
+            self.assertEqual(third, quarantine_dir / "orphans_20260724_090000-3")
 
 
 class TestManifestRoundTrip(unittest.TestCase):
