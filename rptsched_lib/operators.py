@@ -1,9 +1,8 @@
 import csv
-import os
-import shutil
-import tempfile
 from collections import namedtuple
 from pathlib import Path
+
+from rptsched_lib.atomic import atomic_write
 
 OperatorMismatch = namedtuple("OperatorMismatch", ["id", "old_operator", "new_operator"])
 SkippedId = namedtuple("SkippedId", ["id", "reason"])
@@ -60,20 +59,6 @@ def read_operator(data_dir, template_id):
     return _extract_operator(set_path)
 
 
-def _atomic_write(set_path, lines):
-    fd, tmp_path = tempfile.mkstemp(dir=str(set_path.parent), prefix=".{}.".format(set_path.name), suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            for line in lines:
-                f.write(line + "\n")
-        shutil.copystat(str(set_path), tmp_path)
-        os.replace(tmp_path, str(set_path))
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
-
-
 def rewrite_operator(data_dir, template_id, new_value):
     set_path = Path(data_dir) / "{}.set".format(template_id)
 
@@ -93,7 +78,7 @@ def rewrite_operator(data_dir, template_id, new_value):
     if not found:
         raise MissingOperatorLineError("No operator line found in {}".format(set_path))
 
-    _atomic_write(set_path, lines)
+    atomic_write(set_path, "".join(line + "\n" for line in lines))
 
 
 MANIFEST_FIELDS = ["id", "old_operator", "new_operator"]

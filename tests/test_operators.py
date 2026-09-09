@@ -218,7 +218,7 @@ class TestApplyMismatches(unittest.TestCase):
                 "bbbb": OperatorMismatch("bbbb", "OLDB", "NEWB"),
             }
 
-            with patch("rptsched_lib.operators.os.replace", side_effect=OSError("simulated failure")):
+            with patch("rptsched_lib.atomic.os.replace", side_effect=OSError("simulated failure")):
                 with self.assertRaises(OperatorRewriteError):
                     apply_mismatches(data_dir, run_dir, mismatches)
 
@@ -251,7 +251,7 @@ class TestApplyMismatches(unittest.TestCase):
                     raise OSError("simulated failure on third rewrite")
                 return real_replace(*args, **kwargs)
 
-            with patch("rptsched_lib.operators.os.replace", side_effect=flaky_replace):
+            with patch("rptsched_lib.atomic.os.replace", side_effect=flaky_replace):
                 with self.assertRaises(OperatorRewriteError):
                     apply_mismatches(data_dir, run_dir, mismatches)
 

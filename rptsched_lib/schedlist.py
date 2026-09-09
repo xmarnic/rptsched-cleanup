@@ -1,8 +1,7 @@
 import bisect
-import os
-import shutil
-import tempfile
 from pathlib import Path
+
+from rptsched_lib.atomic import atomic_write
 
 SCHEDLIST_FILENAME = "schedlist"
 
@@ -10,20 +9,6 @@ SCHEDLIST_FILENAME = "schedlist"
 def _read_lines(schedlist_path: Path):
     with schedlist_path.open() as f:
         return [line.rstrip("\n") for line in f if line.strip()]
-
-
-def _atomic_write(schedlist_path: Path, lines):
-    fd, tmp_path = tempfile.mkstemp(dir=str(schedlist_path.parent), prefix=".schedlist.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            for line in lines:
-                f.write(line + "\n")
-        shutil.copystat(str(schedlist_path), tmp_path)
-        os.replace(tmp_path, str(schedlist_path))
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
 
 
 def remove_lines(data_dir, ids_to_remove) -> list:
@@ -40,7 +25,7 @@ def remove_lines(data_dir, ids_to_remove) -> list:
         else:
             remaining.append(raw_line)
 
-    _atomic_write(schedlist_path, remaining)
+    atomic_write(schedlist_path, "".join(line + "\n" for line in remaining))
     return removed
 
 
@@ -66,5 +51,5 @@ def insert_lines(data_dir, lines_to_insert) -> dict:
         current_ids.add(template_id)
         inserted += 1
 
-    _atomic_write(schedlist_path, current_lines)
+    atomic_write(schedlist_path, "".join(line + "\n" for line in current_lines))
     return {"inserted": inserted, "skipped": skipped}

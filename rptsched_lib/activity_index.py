@@ -1,11 +1,10 @@
 import json
-import os
-import tempfile
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 
 from rptsched_lib import hist_log, report_log
+from rptsched_lib.atomic import atomic_write
 
 # datetime.fromisoformat() is 3.7+ only (project is pinned to 3.6.8, see
 # CLAUDE.md) -- all timestamps here are always second-precision (no
@@ -47,15 +46,7 @@ def _load_cache(cache_path: Path):
 
 def _save_cache(cache_path: Path, cache):
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=str(cache_path.parent), prefix=".activity_index.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(cache, f)
-        os.replace(tmp_path, str(cache_path))
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
+    atomic_write(cache_path, json.dumps(cache))
 
 
 def _cached_report_file_entries(log_path: Path, cache):

@@ -113,7 +113,7 @@ class TestExecute(unittest.TestCase):
             _write_set_file(data_dir, "bbbb", "STALEOWNER")
             quarantine_dir = Path(tmp) / "quarantine"
 
-            with patch("rptsched_lib.operators.os.replace", side_effect=OSError("simulated failure")):
+            with patch("rptsched_lib.atomic.os.replace", side_effect=OSError("simulated failure")):
                 err = io.StringIO()
                 with redirect_stdout(io.StringIO()), redirect_stderr(err):
                     exit_code = sync_operator_field.main([
