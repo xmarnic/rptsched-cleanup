@@ -5,7 +5,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import report_stale_templates
+from composables import report_stale_templates
 from tests.fixtures import make_rptsched_dir
 
 STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"

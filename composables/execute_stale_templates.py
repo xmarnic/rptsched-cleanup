@@ -47,6 +47,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from rptsched_lib.cli import run
 from rptsched_lib.quarantine import (
     QuarantineMoveError,
@@ -173,7 +175,7 @@ def main(argv=None) -> int:
     if abort_reason is not None:
         print(
             "Refusing to proceed -- the reviewed candidate file no longer matches a fresh "
-            "re-detection: {}. Nothing was written. Re-run detect_stale_templates.py, review "
+            "re-detection: {}. Nothing was written. Re-run composables/detect_stale_templates.py, review "
             "again, and try again.".format(abort_reason),
             file=sys.stderr,
         )

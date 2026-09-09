@@ -40,6 +40,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from rptsched_lib.cli import run
 from rptsched_lib.operators import (
     OperatorRewriteError,
@@ -158,7 +160,7 @@ def main(argv=None) -> int:
     if abort_reason is not None:
         print(
             "Refusing to proceed -- the reviewed candidate file no longer matches live data: "
-            "{}. Nothing was written. Re-run detect_operators.py, review again, and try "
+            "{}. Nothing was written. Re-run composables/detect_operators.py, review again, and try "
             "again.".format(abort_reason),
             file=sys.stderr,
         )

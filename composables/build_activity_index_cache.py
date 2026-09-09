@@ -8,7 +8,7 @@ cron, or by hand before an interactive detect | report session) means
 those two pay an incremental update instead of a cold rebuild.
 
 Usage:
-    python3 build_activity_index_cache.py \
+    python3 composables/build_activity_index_cache.py \
         --logs-report-dir /path/to/Logs/Report \
         --logs-hist-dir /path/to/Logs/Hist \
         --index-cache-path /path/to/activity_index_cache.json
@@ -16,6 +16,8 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rptsched_lib.cli import run
 from rptsched_lib.stale_candidates import EmptyLogDirectoryError, build_index

@@ -7,9 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import detect_stale_templates
-import execute_stale_templates
-import report_stale_templates
+from composables import detect_stale_templates
+from composables import execute_stale_templates
+from composables import report_stale_templates
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_RPTSCHED_DIR = REPO_ROOT / "rptsched"

@@ -49,9 +49,9 @@ import sys
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import detect_stale_templates
-import execute_stale_templates
-import report_stale_templates
+from composables import detect_stale_templates
+from composables import execute_stale_templates
+from composables import report_stale_templates
 from rptsched_lib.cli import default_data_dir, run, unicorn_paths, unicorn_root_default
 
 DEFAULT_DATA_DIR = default_data_dir("stale_templates")

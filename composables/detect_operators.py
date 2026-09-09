@@ -13,7 +13,7 @@ the live .set/schedlist values directly for its pre-mutation check
 instead of shelling out to this CLI.
 
 Usage:
-    python3 detect_operators.py --rptsched-dir /path/to/rptsched > candidates.jsonl
+    python3 composables/detect_operators.py --rptsched-dir /path/to/rptsched > candidates.jsonl
 """
 import argparse
 import json
@@ -21,6 +21,8 @@ import shutil
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rptsched_lib.cli import run
 from rptsched_lib.operators import find_operator_mismatches

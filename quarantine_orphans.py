@@ -39,9 +39,9 @@ import sys
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import detect_orphans
-import execute_orphans
-import report_orphans
+from composables import detect_orphans
+from composables import execute_orphans
+from composables import report_orphans
 from rptsched_lib.cli import default_data_dir, run, unicorn_paths, unicorn_root_default
 
 DEFAULT_DATA_DIR = default_data_dir("orphans")

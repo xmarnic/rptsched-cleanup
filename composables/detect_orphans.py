@@ -13,7 +13,7 @@ to this CLI, to avoid paying a second full-directory copy on every
 mutating run.
 
 Usage:
-    python3 detect_orphans.py --rptsched-dir /path/to/rptsched > candidates.jsonl
+    python3 composables/detect_orphans.py --rptsched-dir /path/to/rptsched > candidates.jsonl
 """
 import argparse
 import json
@@ -21,6 +21,8 @@ import shutil
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rptsched_lib.cli import run
 from rptsched_lib.orphans import find_orphan_groups

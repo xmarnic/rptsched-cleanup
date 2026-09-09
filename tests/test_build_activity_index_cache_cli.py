@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import build_activity_index_cache
+from composables import build_activity_index_cache
 
 
 def _log_dirs_with_placeholder(tmp):

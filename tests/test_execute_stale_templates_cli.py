@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import execute_stale_templates
+from composables import execute_stale_templates
 from tests.fixtures import make_rptsched_dir
 
 STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"

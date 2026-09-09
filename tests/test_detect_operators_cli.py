@@ -5,7 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import detect_operators
+from composables import detect_operators
 from tests.fixtures import make_rptsched_dir
 
 

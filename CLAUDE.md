@@ -66,8 +66,17 @@ object per line, one stream per category), plus one coherent wrapper most
 usage should go through day to day. Full rationale and design decisions:
 `docs/superpowers/specs/2026-09-09-composable-cli-pipeline-design.md`.
 
-**Plumbing** (`detect_<category>.py` / `report_<category>.py` /
-`execute_<category>.py`, e.g. `detect_stale_templates.py`):
+**Plumbing** (`composables/detect_<category>.py` / `report_<category>.py` /
+`execute_<category>.py`, e.g. `composables/detect_stale_templates.py`) —
+all under `composables/`, kept separate from the repo root so the root
+holds only the three porcelain wrappers a normal session actually invokes.
+Each is still directly runnable and pipeable exactly as before
+(`python3 composables/detect_orphans.py --rptsched-dir ... | python3
+composables/report_orphans.py`) — moving them out of the root required
+adding one `sys.path.insert(0, ...)` line per file (they already imported
+`sys`/`Path`) so `from rptsched_lib...` still resolves regardless of the
+caller's working directory, since plain script execution (unlike `python3
+-m`) puts the *script's own* directory on `sys.path`, not the repo root:
 - `detect_<category>.py` — pure detection. Copies `--rptsched-dir` first
   (`schedlist` is a single flat-file index for the entire report
   scheduler — too sensitive to read live from a tool that only needs

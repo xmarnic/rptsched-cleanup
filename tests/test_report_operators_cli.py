@@ -5,7 +5,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import report_operators
+from composables import report_operators
 
 
 class TestReportOperatorsCli(unittest.TestCase):

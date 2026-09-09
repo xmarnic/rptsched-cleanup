@@ -41,9 +41,9 @@ import sys
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import detect_operators
-import execute_operators
-import report_operators
+from composables import detect_operators
+from composables import execute_operators
+from composables import report_operators
 from rptsched_lib.cli import default_data_dir, run, unicorn_paths, unicorn_root_default
 
 DEFAULT_DATA_DIR = default_data_dir("operators")

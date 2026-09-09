@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-Human-readable summary of an orphan candidate stream produced by
-detect_orphans.py. Pure stream formatter -- no --rptsched-dir needed at
-all, since every field it prints (id, filenames) is already in the
-stream.
+Human-readable summary of an operator-mismatch candidate stream
+produced by detect_operators.py. Pure stream formatter -- no --rptsched-dir
+needed at all, since every field it prints is already in the stream.
 
 Usage:
-    python3 detect_orphans.py --rptsched-dir /path/to/rptsched > candidates.jsonl
-    python3 report_orphans.py < candidates.jsonl
+    python3 composables/detect_operators.py --rptsched-dir /path/to/rptsched > candidates.jsonl
+    python3 composables/report_operators.py < candidates.jsonl
 """
 import argparse
 import json
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from rptsched_lib.cli import run
 
 
@@ -39,11 +40,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     candidates = _read_candidates(args.candidates_file)
-    total_files = sum(len(c["filenames"]) for c in candidates)
 
-    print("{} orphan id(s), {} file(s) would be moved".format(len(candidates), total_files))
+    print("{} operator mismatch(es) found".format(len(candidates)))
     for c in sorted(candidates, key=lambda c: c["id"]):
-        print("  {}: {}".format(c["id"], ", ".join(c["filenames"])))
+        print("  {}: {} -> {}".format(c["id"], c["old_operator"], c["new_operator"]))
     return 0
 
 

@@ -29,9 +29,9 @@ detect_stale_templates.py, so the active-population complement lines up
 with what was actually excluded during detection.
 
 Usage:
-    python3 detect_stale_templates.py --rptsched-dir ... --logs-report-dir ... \
+    python3 composables/detect_stale_templates.py --rptsched-dir ... --logs-report-dir ... \
         --logs-hist-dir ... --index-cache-path ... > candidates.jsonl
-    python3 report_stale_templates.py --rptsched-dir /path/to/rptsched < candidates.jsonl
+    python3 composables/report_stale_templates.py --rptsched-dir /path/to/rptsched < candidates.jsonl
 """
 import argparse
 import json
@@ -41,6 +41,8 @@ import sys
 from collections import Counter, namedtuple
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rptsched_lib.cli import run
 from rptsched_lib.templates import count_manual_templates

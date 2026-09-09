@@ -17,7 +17,7 @@ eliminate. Point it, build_activity_index_cache.py, and
 execute_stale_templates.py at the same path.
 
 Usage:
-    python3 detect_stale_templates.py --rptsched-dir /path/to/rptsched \
+    python3 composables/detect_stale_templates.py --rptsched-dir /path/to/rptsched \
         --logs-report-dir /path/to/Logs/Report \
         --logs-hist-dir /path/to/Logs/Hist \
         --index-cache-path /path/to/activity_index_cache.json \
@@ -30,6 +30,8 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rptsched_lib.cli import run
 from rptsched_lib.candidate_schema import candidate_to_record

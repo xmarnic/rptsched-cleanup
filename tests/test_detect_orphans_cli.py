@@ -5,7 +5,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import detect_orphans
+from composables import detect_orphans
 from tests.fixtures import make_rptsched_dir
 
 KNOWN_LINE = "abcd|noverdue|Known Template|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"

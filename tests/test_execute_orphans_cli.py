@@ -5,7 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import execute_orphans
+from composables import execute_orphans
 from rptsched_lib.quarantine import read_manifest
 from tests.fixtures import make_rptsched_dir
 
