@@ -26,13 +26,13 @@ import argparse
 import difflib
 import shutil
 import sys
-from collections import Counter
+from collections import Counter, namedtuple
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rptsched_lib.activity_index import build_activity_index
+from rptsched_lib.activity_index import build_activity_index, is_active
 from rptsched_lib.hist_log import find_hist_files
 from rptsched_lib.report_log import find_log_files
 from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates, years_before
@@ -65,11 +65,47 @@ def build_parser():
     return parser
 
 
-def _set_file_path(data_copy, candidate):
-    for name in candidate.filenames:
-        if name.endswith(".set"):
-            return data_copy / name
-    return None
+ActiveTemplate = namedtuple("ActiveTemplate", ["id", "report_source", "description", "owner"])
+
+
+def _collect_active_manual_templates(data_dir, activity_index, exclude_owners, exclude_owner_regexes):
+    """
+    Manual templates (frequency_flag == "n") that ARE active per the same
+    activity index remove_stale_templates.py uses -- i.e. never touched by
+    removal at all. Separate from find_stale_template_candidates on
+    purpose: that function only tells you about the stale side, and this
+    tool's active-duplicates check needs the opposite population. Applies
+    the same owner exclusions as the stale-candidate path for consistency
+    (e.g. skips ACQ if that's passed in), but doesn't reuse
+    find_stale_template_candidates's private owner-matching helper --
+    detection logic for a genuinely different check stays separate, same
+    as this repo's other cleanup categories.
+    """
+    import re
+    compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
+    templates = []
+    with (data_dir / "schedlist").open() as f:
+        for line in f:
+            raw_line = line.rstrip("\n")
+            if not raw_line.strip():
+                continue
+            fields = raw_line.split("|")
+            if len(fields) < 7:
+                continue
+            template_id, report_source, description, frequency_flag, created, last_run, owner = fields[0:7]
+            if frequency_flag != "n":
+                continue
+            owner_lower = owner.lower()
+            if any(owner_lower == pattern.lower() for pattern in exclude_owners):
+                continue
+            if any(regex.search(owner) for regex in compiled_regexes):
+                continue
+            if not is_active(activity_index, report_source, description, owner):
+                continue
+            templates.append(ActiveTemplate(
+                id=template_id, report_source=report_source, description=description, owner=owner,
+            ))
+    return templates
 
 
 def _line_diff_count(lines_a, lines_b):
@@ -184,53 +220,50 @@ def main(argv=None):
 
     print()
     print("=" * 60)
-    print("DUPLICATE CANDIDATES -- same owner+description")
+    print("ACTIVE FUNCTIONAL DUPLICATES -- informational only, not tied to removal")
     print("=" * 60)
     print(
-        "CONFIRMED means byte-identical .set files and matching report_source --\n"
-        "as strong a same-report signal as this data can give without documented\n"
-        ".set field semantics. Anything else is a similarity hint only (a nonzero\n"
-        "diff can still be a real duplicate resaved on a newer Symphony version,\n"
-        "which adds extra auto-enumerated fields and a newer copyright banner) --\n"
-        "worth a look, not proof either way."
+        "Stale candidates above are removed regardless of duplication -- both\n"
+        "copies are independently unused, so there's nothing to pick between.\n"
+        "This section looks at the opposite population instead: ACTIVE templates\n"
+        "(never touched by removal), compared by owner regardless of description\n"
+        "text, to catch cases the activity index's (report_source, description)\n"
+        "join key can't see -- e.g. the same report saved twice under different\n"
+        "descriptions. Only byte-identical .set matches are shown; without a\n"
+        "description match to anchor on, anything less than exact is just noise.\n"
+        "This is awareness only, for a possible manual consolidation effort --\n"
+        "an active template someone depends on isn't safe to remove just because\n"
+        "it has a twin, so nothing here feeds into any removal decision."
     )
-    dup_groups = {}
-    for c in candidates.values():
-        dup_groups.setdefault((c.owner, c.description), []).append(c)
-    dup_groups = {k: v for k, v in dup_groups.items() if len(v) > 1}
+    active_templates = _collect_active_manual_templates(
+        data_copy, activity_index, exclude_owners=args.exclude_owner, exclude_owner_regexes=args.exclude_owner_regex,
+    )
+    by_owner_active = {}
+    for t in active_templates:
+        by_owner_active.setdefault(t.owner, []).append(t)
 
-    confirmed_pairs = 0
-    possible_pairs = 0
+    found_any = False
+    for owner in sorted(by_owner_active):
+        group = sorted(by_owner_active[owner], key=lambda t: t.id)
+        rows = []
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                a, b = group[i], group[j]
+                path_a = data_copy / (a.id + ".set")
+                path_b = data_copy / (b.id + ".set")
+                if not path_a.is_file() or not path_b.is_file():
+                    continue
+                lines_a = path_a.read_text(errors="replace").splitlines()
+                lines_b = path_b.read_text(errors="replace").splitlines()
+                if _line_diff_count(lines_a, lines_b) == 0:
+                    rows.append((a.id, a.description, b.id, b.description))
+        if rows:
+            found_any = True
+            print("\n{} ({} active templates checked)".format(owner, len(group)))
+            _print_table(rows, ["id_a", "description_a", "id_b", "description_b"])
 
-    if not dup_groups:
-        print("\nNo owner+description group has more than one candidate.")
-    else:
-        for (owner, description), group in sorted(dup_groups.items()):
-            group = sorted(group, key=lambda c: c.id)
-            print("\n{} -- \"{}\" ({} templates)".format(owner, description, len(group)))
-            rows = []
-            for i in range(len(group)):
-                for j in range(i + 1, len(group)):
-                    a, b = group[i], group[j]
-                    path_a = _set_file_path(data_copy, a)
-                    path_b = _set_file_path(data_copy, b)
-                    if path_a is None or path_b is None or not path_a.is_file() or not path_b.is_file():
-                        rows.append((a.id, b.id, "n/a (missing .set file)"))
-                        continue
-                    lines_a = path_a.read_text(errors="replace").splitlines()
-                    lines_b = path_b.read_text(errors="replace").splitlines()
-                    diff_count = _line_diff_count(lines_a, lines_b)
-                    if diff_count == 0 and a.report_source == b.report_source:
-                        confirmed_pairs += 1
-                        status = "CONFIRMED (byte-identical .set, same report_source)"
-                    else:
-                        possible_pairs += 1
-                        status = "possible -- {} differing line(s), manual review".format(diff_count)
-                    rows.append((a.id, b.id, status))
-            _print_table(rows, ["id_a", "id_b", "status"])
-
-        print("\n{} confirmed pair(s), {} possible pair(s) needing manual review.".format(
-            confirmed_pairs, possible_pairs))
+    if not found_any:
+        print("\nNo byte-identical .set matches found among active templates within any owner.")
 
     print()
     print("=" * 60)
@@ -242,8 +275,8 @@ def main(argv=None):
     for owner in sorted(by_owner):
         group = sorted(by_owner[owner], key=lambda c: (c.report_source, c.description))
         print("\n{} ({} removed)".format(owner, len(group)))
-        rows = [(c.id, c.report_source, c.description, c.created, ", ".join(c.filenames)) for c in group]
-        _print_table(rows, ["id", "report_source", "description", "created", "files"])
+        rows = [(c.id, c.report_source, c.description, c.created) for c in group]
+        _print_table(rows, ["id", "report_source", "description", "created"])
 
     return 0
 
