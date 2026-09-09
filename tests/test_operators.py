@@ -9,11 +9,14 @@ from rptsched_lib.operators import (
     OperatorMismatch,
     SkippedId,
     read_operator,
+    read_schedlist_owners,
     rewrite_operator,
     MissingOperatorLineError,
     write_operator_manifest,
     read_operator_manifest,
     apply_mismatches,
+    apply_reviewed_changes,
+    classify_current_value,
     OperatorRewriteError,
     MANIFEST_FIELDS,
 )
@@ -266,6 +269,50 @@ class TestApplyMismatches(unittest.TestCase):
             self.assertEqual(read_operator(data_dir, "aaaa"), "NEWA")
             self.assertEqual(read_operator(data_dir, "bbbb"), "NEWB")
             self.assertEqual(read_operator(data_dir, "cccc"), "OLDC")
+
+
+class TestReadSchedlistOwners(unittest.TestCase):
+    def test_returns_id_to_owner_mapping(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            data_dir.mkdir(exist_ok=True)
+            (data_dir / "schedlist").write_text(_schedlist_line("abcd", "SOMEMGR") + "\n")
+
+            self.assertEqual(read_schedlist_owners(data_dir), {"abcd": "SOMEMGR"})
+
+
+class TestClassifyCurrentValue(unittest.TestCase):
+    def test_matches_old(self):
+        self.assertEqual(classify_current_value("OLD", "OLD", "NEW"), "matches_old")
+
+    def test_matches_new(self):
+        self.assertEqual(classify_current_value("NEW", "OLD", "NEW"), "matches_new")
+
+    def test_conflict(self):
+        self.assertEqual(classify_current_value("SOMETHING_ELSE", "OLD", "NEW"), "conflict")
+
+
+class TestApplyReviewedChanges(unittest.TestCase):
+    def test_rewrites_matches_old_and_records_matches_new_without_rewriting(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "data"
+            data_dir.mkdir()
+            _write_set_file(data_dir, "aaaa", "OLDA")
+            _write_set_file(data_dir, "bbbb", "NEWB")  # already applied
+            run_dir = make_run_dir(Path(tmp) / "quarantine", "operators", "20260724_090000")
+
+            reviewed = {
+                "aaaa": {"id": "aaaa", "old_operator": "OLDA", "new_operator": "NEWA"},
+                "bbbb": {"id": "bbbb", "old_operator": "OLDB", "new_operator": "NEWB"},
+            }
+            classifications = {"aaaa": "matches_old", "bbbb": "matches_new"}
+
+            rows = apply_reviewed_changes(data_dir, run_dir, reviewed, classifications)
+
+            self.assertEqual(read_operator(data_dir, "aaaa"), "NEWA")
+            self.assertEqual(read_operator(data_dir, "bbbb"), "NEWB")
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(read_operator_manifest(run_dir), rows)
 
 
 if __name__ == "__main__":
