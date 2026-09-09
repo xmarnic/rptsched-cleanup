@@ -107,23 +107,53 @@ field in place; none of them are named "remove," since nothing is ever
 deleted.
 
 ```
-(bare)              detect only — saves candidates into --work-dir, prints a count
+(bare)              detect only — saves candidates into --data-dir, prints a count
 --report             also prints the full human-readable report
---execute             quarantines/applies using --work-dir's saved candidates file
+--execute             quarantines/applies using --data-dir's saved candidates file
 --restore RUN_DIR     restores a prior run
 ```
 
-`--work-dir` defaults to a persistent per-category directory
-(`stale_templates_work/`, `orphans_work/`, `operators_work/`), holding the
-candidates file and (for stale-templates) the activity-index cache — pass
-it explicitly to control the location. `--execute` deliberately **requires**
-a candidates file already sitting in `--work-dir`; it will not silently
-re-detect first, since skipping straight from a bare invocation to
-`--execute` would skip the review step entirely. (The underlying
-`execute_<category>.py` tool still independently re-verifies against live
-data regardless — the wrapper's requirement is a separate, additional
-gate: you have to have actually looked at a report before the wrapper
-lets you act on it.)
+`--execute` deliberately **requires** a candidates file already sitting in
+`--data-dir`; it will not silently re-detect first, since skipping straight
+from a bare invocation to `--execute` would skip the review step entirely.
+(The underlying `execute_<category>.py` tool still independently
+re-verifies against live data regardless — the wrapper's requirement is a
+separate, additional gate: you have to have actually looked at a report
+before the wrapper lets you act on it.)
+
+Two flags exist purely to cut down on per-invocation typing, both wrapper-
+only (the plumbing tools underneath never gain env-var coupling or hidden
+defaults — see above):
+
+- `--unicorn-root` (env fallback `RPTSCHED_UNICORN_ROOT`) — the parent
+  directory a Symphony Unicorn install's `Rptsched/`, `Logs/Report/`, and
+  `Logs/Hist/` all share (e.g. `/software/WYLD/Unicorn`). Given this, the
+  wrapper derives `--rptsched-dir`/`--logs-report-dir`/`--logs-hist-dir`
+  itself via `rptsched_lib/cli.py`'s `unicorn_paths()`. Set the env var once
+  per shell/profile and stop passing any of the three explicitly. This
+  relative layout is Symphony's own convention, not a per-site choice —
+  only the root itself (which site's install) varies, so it's never
+  hardcoded in the repo (see git history: commit `4411823` deliberately
+  removed hardcoded site paths, including a path with a username baked
+  in, for exactly this reason).
+- `--data-dir` — this **tool's own storage** (the candidates file, plus the
+  activity-index cache for stale-templates), not Symphony's directory.
+  Defaults to `$XDG_STATE_HOME/rptsched-cleanup/<category>/` (or
+  `~/.local/state/rptsched-cleanup/<category>/` if unset) via
+  `rptsched_lib/cli.py`'s `default_data_dir()` — anchored there rather
+  than to the current working directory specifically so it survives
+  re-extracting the tool into a fresh directory between a review run and
+  a later `--execute`, which could otherwise silently point at an empty
+  directory and quietly lose both the review state and the activity-index
+  cache with no error at all.
+
+`--quarantine-dir` has **no default and no env fallback**, by design — it's
+operator infrastructure the caller must own explicitly, not something to
+default. It also can't be merged with `--data-dir` even though both are
+"this tool's own storage" in some loose sense: detect and execute must
+agree on where review state lives regardless of what's passed for
+`--quarantine-dir` on a given invocation, and quarantine-dir is chosen at
+execute/restore time, not detect time.
 
 ### Safety guarantees, restated for the split
 
@@ -159,13 +189,21 @@ lets you act on it.)
   `restore_run`, plus generalized `write_manifest`/`read_manifest`
   (parameterized by fieldnames, header-validated on read — raises
   `InvalidManifestError` on mismatch). Used by every category that
-  quarantines files.
+  quarantines files. `make_run_dir` disambiguates rather than raising if
+  its timestamped name already exists (`orphans_<ts>-2`, `-3`, ...) — two
+  `--execute` runs landing in the same wall-clock second is a real case,
+  not hypothetical, caught via real-data testing of `sync_operators.py`.
 - `atomic.py` — one shared `atomic_write(path, content)`
   (mkstemp + conditional copystat + os.replace), replacing what used to
   be three independently duplicated copies.
 - `cli.py` — `run(main, argv)`, the standard entry point for every CLI
   tool in this repo; handles `BrokenPipeError` cleanly so piping output
-  into `head`/`less`/another tool doesn't crash with a traceback.
+  into `head`/`less`/another tool doesn't crash with a traceback. Also
+  home to the wrapper-only convenience helpers backing `--unicorn-root`
+  and `--data-dir`: `unicorn_root_default()` (reads `RPTSCHED_UNICORN_ROOT`),
+  `unicorn_paths(root)` (derives the three Symphony sub-paths from a
+  root), and `default_data_dir(category)` (the `$XDG_STATE_HOME`-based
+  default). None of these are used by the plumbing tools themselves.
 - Candidate-detection logic stays separate per category — scripts must
   not invoke each other's detection logic (e.g. stale-templates must not
   hand off to orphans' "sweep all current orphans," since that would
