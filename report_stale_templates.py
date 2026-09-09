@@ -42,6 +42,7 @@ from collections import Counter, namedtuple
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from rptsched_lib.cli import run
 from rptsched_lib.templates import count_manual_templates
 
 ActiveTemplate = namedtuple("ActiveTemplate", ["id", "report_source", "description", "owner"])
@@ -238,4 +239,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run(main)

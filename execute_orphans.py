@@ -31,6 +31,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from rptsched_lib.cli import run
 from rptsched_lib.orphans import find_orphan_groups
 from rptsched_lib.quarantine import (
     QuarantineMoveError,
@@ -127,4 +128,4 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run(main)

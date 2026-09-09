@@ -17,6 +17,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from rptsched_lib.cli import run
 from rptsched_lib.stale_candidates import EmptyLogDirectoryError, build_index
 
 
@@ -47,4 +48,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run(main)

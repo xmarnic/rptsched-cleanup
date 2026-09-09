@@ -13,6 +13,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from rptsched_lib.cli import run
 
 
 def build_parser():
@@ -47,4 +48,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run(main)

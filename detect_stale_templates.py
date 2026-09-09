@@ -31,6 +31,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from rptsched_lib.cli import run
 from rptsched_lib.candidate_schema import candidate_to_record
 from rptsched_lib.stale_candidates import EmptyLogDirectoryError, detect_stale_templates
 
@@ -79,4 +80,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run(main)

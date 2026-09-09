@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from rptsched_lib.cli import run
 from rptsched_lib.operators import find_operator_mismatches
 
 SCHEMA_VERSION = 1
@@ -58,4 +59,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run(main)
