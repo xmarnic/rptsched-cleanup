@@ -31,7 +31,7 @@ interpretation:
 | Field index | Name | Notes |
 |---|---|---|
 | 0 | id | 4-character ID, matches `<id>.set`/`<id>.selans` on disk |
-| 1 | report_type | Symphony report type code |
+| 1 | report_source | Symphony report source code |
 | 2 | description | Human-entered title/description |
 | 3 | frequency_flag | See below |
 | 4 | created | `YYYYMMDDHHMM` — see caveat below for scheduled/recurring rows |

@@ -8,6 +8,16 @@ everything about modes, quarantine/manifest/restore mechanics, and CLI
 shape — none of that changes here). This document covers **only** what
 counts as a removal candidate and why the original rule doesn't work.
 
+This is a revision of an earlier version of this same document, which
+described a `Logs/Report/`-only design. That version is superseded by
+this one: subsequent investigation (see
+`2026-08-31-report-log-data-sources-and-tagging-roadmap.md` for the full
+empirical record) found a second, owner-attributed source
+(`Logs/Hist/`) that closes most of the ambiguity the `Logs/Report/`-only
+design had to work around operationally (renaming templates, an
+observation window, etc.) — all of that operational rollout plan is
+dropped in favor of using both sources directly.
+
 ## Why the original rule is broken, not just mistuned
 
 The original spec's inactivity rule trusted `schedlist`'s `last_run`
@@ -22,7 +32,7 @@ isn't just occasionally wrong, it's structurally blind to the most common
 usage pattern for a manual (`frequency_flag == "n"`) template:
 
 - Ad hoc "Run Now" (Setup and Schedule menu, or double-click) **never**
-  updates a manual template's own `last_run`, on any report type tested,
+  updates a manual template's own `last_run`, on any report source tested,
   on both the test server and directly on production.
 - Scheduling anything on a manual template — ASAP, one-time ("run once"
   → `frequency_flag = "o"`), daily, weekly — **also never touches the
@@ -34,66 +44,104 @@ usage pattern for a manual (`frequency_flag == "n"`) template:
 So a manual template's `last_run`/`created` cannot answer "is this being
 used," full stop — not for one report family, for all of them. This
 isn't a threshold problem; the field doesn't carry the information the
-original rule needed.
+original rule needed. `created` remains trustworthy for one narrow
+purpose only: a genuine one-time creation stamp on `"n"` rows specifically
+(see `rptsched-domain-reference.md`'s field-4 caveat) — used below only
+as a recency floor for brand-new templates, never as an activity signal.
 
-## The real signal: `Logs/Report/`
+## The real signal: two independent log sources
 
-`/software/WYLD/Unicorn/Logs/Report/` contains a system-wide execution
-log, independent of `schedlist` entirely:
+Two data sources outside `rptsched/` record actual report execution,
+with different strengths. Both are read-only inputs to this tool —
+neither is ever written to, moved, or modified.
 
-- Current month uncompressed (`YYYYMM.log`) plus a same-day daily file
-  (`YYYYMMDD.log`); prior months compressed (`YYYYMM.log.Z`, Unix
-  `compress` format — not gzip). Confirmed present back to at least
-  **January 2021** (5+ years of retained history as of this writing).
-- Every report execution — ad hoc or scheduled, no exceptions found in
-  testing — produces a line:
-  ```
-  YYYYMMDDHHMMSS Starting report <report_type>:"<description>"
-  YYYYMMDDHHMMSS Adding report <report_type>:<description> to finished list
-  YYYYMMDDHHMMSS Finished report <report_type>:"<description>"
-  ```
-  Confirmed format-stable from August 2025 through today; confirmed to
-  record every action type tested (immediate run via both UI paths, ASAP,
-  run-once, and actual recurring-schedule fires).
-- When a report is configured to auto-mail its output, the log also
-  captures sender/recipient email:
-  `Automatically mailing report <type>:"<desc>" from <sender> to <recipient>`
-  — a secondary cross-reference when it's present (some `schedlist` rows
-  carry an email address in their own fields), but not universal.
+### `Logs/Report/` — unconditional, no owner
 
-**This is the real usage signal** — it exists for exactly the usage
-pattern (`schedlist` `last_run`) that turned out to be blind.
+`/software/WYLD/Unicorn/Logs/Report/`: current month uncompressed
+(`YYYYMM.log`) plus a same-day daily file, prior months compressed
+(`YYYYMM.log.Z`, Unix `compress` format — not gzip, needs `zcat` not
+`gzip`). Confirmed present back to at least January 2021.
 
-## The join-key limitation, and why it's survivable
+Every report execution — ad hoc or scheduled, no exceptions found in
+testing — produces:
+```
+YYYYMMDDHHMMSS Starting report <report_source>:"<description>"
+YYYYMMDDHHMMSS Adding report <report_source>:<description> to finished list
+YYYYMMDDHHMMSS Finished report <report_source>:"<description>"
+```
+Plain text, no decode step, ever. This is a **completion** signal — it
+proves a report finished, not just that someone requested one. Cheap
+enough to parse in full on every run; probably doesn't need incremental
+caching.
 
-Log entries identify a run by `(report_type, description)` — there is no
-per-run id, username, or session field bracketing these lines (checked
-directly; not present in the sampled context around several entries,
-including our own test runs).
+No owner field. Join key is `(report_source, description)` only.
 
-Checked against the local `rptsched/` mirror (5,311 rows, 4,053 manual):
-**3,443 of 4,053 manual templates (85%) have a `(report_type,
-description)` pair unique to them** — the log joins back to exactly one
-`schedlist` row for those. The remaining **610 templates across 220
-shared pairs (15%)** are ambiguous, concentrated almost entirely in
-templates that never got a custom description (literally the
-`report_type` repeated as `description`, e.g. bare `"TS2bibload"`, or an
-unedited message-catalog default like `$<list_items>`). Notably, `efwj`
-and `qmod` — the two templates that surfaced this whole investigation —
-are themselves in the ambiguous 15% (`"TS2bibload"`/`"TS2orderload"` bare
-descriptions are shared by 13 and 18 templates respectively, across 11
-and 17 owners).
+### `Logs/Hist/` — owner-attributed, catches ad hoc, longer retention
 
-The ambiguity is survivable because **the join key itself provides
-group-level protection for free**: since every template sharing a
-`(report_type, description)` pair produces the same lookup result, "is
-this key active" and "is this specific template active" collapse to the
-same question for ambiguous groups. The cost is symmetric with the
-benefit — a genuinely-dead template sharing a key with an active sibling
-stays protected too (a false negative, not a false positive). That's the
-correct failure direction for this tool: it already treats quarantine
-as reversible and erring toward keeping things over removing them
-correctly, and this is the same bias applied one level up.
+`/software/WYLD/Unicorn/Logs/Hist/`: `YYYYMM.hist(.Z)`, confirmed
+present back to at least June 2014 (12+ years). This is Symphony's
+general transaction audit log — not report-specific — so it mixes in
+every transaction type the system handles, at far higher volume than
+`Logs/Report/`.
+
+**Raw format**: every transaction line carries its command as a
+2-character code directly after a `^S<seq>` sequence number, e.g.
+`^S93goFF17TECH...`. Confirmed against real production data (see the
+roadmap doc's command-code table) — the codes relevant to report
+scheduling:
+
+| code | command | signal value |
+|---|---|---|
+| `ge` | Create Scheduled Report | commit/save event — carries frequency (including **`"a"` = ad hoc**, never persisted to `schedlist` but logged here), owner, id, report_source, description. The only source that sees ad hoc "Run Now" at all. |
+| `gg` | Modify Scheduled Report | edits to an existing schedule, including `suspend status`. |
+| `gh` | Remove Scheduled Report | schedule deletion. |
+| `gk` | Remove Finished Report | fires when a user dismisses a completed report from Finished Reports; carries `login of the owner of the report` — the authoritative owner field, distinct from the acting user. Conditional (auto-delivered reports may never trigger it) — a corroborator, not a replacement for `Logs/Report/`'s unconditional signal. |
+| `gu` | Rename Scheduled Report | carries `oS:<old_id>`, linking to the schedule's own previous generation only — **not** back to the manual template that originally spawned it. |
+
+**Performance strategy**: pre-filter raw text for these codes
+(`\^S[0-9]+g[ehgku]`) *before* ever decoding — this needs no
+`logprint`/`translate` call at all for classification, only for
+extracting field values from the already-narrowed subset:
+```
+zcat 202101.hist.Z | rg "\^S[0-9]+g[ehgku]" | logprint | translate
+```
+Reduction magnitude confirmed with real data: the looser `^oa` marker
+(present on these lines but not exclusive to them) matches only ~1.74%
+of raw lines across 31 sampled months (~57.5x fewer lines to decode);
+the code-based filter is a strict subset of that, so at least as good.
+Format stability confirmed representative across the full 3-year window
+via one day's file — `^S<seq><code>` is a fixed Symphony-internal
+transaction-log structure, not something that drifts month to month.
+
+Decoded field mapping (via `logprint | translate`): `^oa`=schedule id,
+`^ob`=report_source, `^oc`=description, `^od`=frequency, `^of`=last-run,
+`^FW`=acting user, `^FD`=station type.
+
+Set Report Options (`go`, dialog-navigation noise) and Search Order Part
+B (an unrelated ACQ command sharing the `"schedule id:"` decoded label)
+are explicitly excluded — filtering by the raw command code rather than
+decoded text avoids picking up either.
+
+## The join-key problem is mostly solved without tagging
+
+The earlier version of this document treated id-tagging as the fix for
+`Logs/Report/`'s ambiguous `(report_source, description)` collisions (15%
+of manual templates, concentrated in un-customized descriptions like
+bare `"TS2bibload"`). With `Logs/Hist/`'s owner attribution available,
+`(report_source, description, owner)` resolves the same-day-generated
+ambiguity for any template with activity recorded in `Logs/Hist/` —
+which, per the `"a"` ad hoc discovery, is now most usage. Group-level
+protection remains the fallback for the residual case (activity found
+only in `Logs/Report/`, never in `Logs/Hist/`, still owner-blind): if
+any template sharing a key is active, all of them are treated as active.
+That's a false-negative bias, not a false-positive one — a genuinely-dead
+template sharing a key with an active sibling stays protected too,
+matching this tool's existing conservative posture (quarantine over
+delete, erring toward keeping things).
+
+No template-renaming operational rollout is needed to get this
+protection — it's available immediately from log history already on
+disk.
 
 ## New candidate selection logic
 
@@ -101,73 +149,70 @@ Replaces the original spec's step 2 (`last_run`/`created` inactivity
 rule) entirely. Steps 1 (`frequency_flag == "n"`) and 3 (owner exclusion)
 are unchanged.
 
-1. Build a last-activity index once per run: parse `Logs/Report/*.log`
-   and `Logs/Report/*.log.Z` for `Finished report` lines, extract
-   `(report_type, description) → most recent timestamp`.
-2. For each manual template row, look up its `(report_type, description)`
-   in the index:
-   - Found, timestamp within `--years` of today → **not** a candidate
-     (active).
-   - Found, but older than `--years` → candidate (same as never-found,
-     below), *unless* `created` is more recent than `--years` ago (a
-     template that's simply new shouldn't be flagged just because it
-     hasn't run yet — matches the spirit of the original rule's
-     never-run-yet handling).
-   - Never found anywhere in retained log history → candidate, subject
-     to the same `created`-recency floor above. (For a template created
-     before log retention begins, "never found" means "hasn't run in at
-     least the full retained window" — 5+ years currently — which is
-     itself stronger evidence than the `--years` default requires.)
+1. Build a merged activity index once per run (cached and updated
+   incrementally, not rebuilt from scratch every time — see
+   Implementation notes):
+   - Parse `Logs/Report/*.log` and `*.log.Z` for `Finished report` lines
+     → `(report_source, description) → most recent timestamp`.
+   - Parse `Logs/Hist/*.hist` and `*.hist.Z`, pre-filtered by raw command
+     code, decoded only for the matched subset → `(report_source,
+     description, owner) → most recent timestamp` for `ge`/`gk` events
+     specifically (the ones that represent real usage, not just
+     schedule bookkeeping).
+   - Only the last `--years` (default 3) of both sources needs scanning
+     — not full retention. This is what keeps the `Logs/Hist/`
+     performance cost tractable despite its 12+ year retention.
+2. For each manual template row, look up its `(report_source,
+   description[, owner])` in the merged index:
+   - Found in **either** source, within `--years` of today → **not** a
+     candidate (active). Two independent sources checked, active in
+     either wins — deliberate defense in depth given this exact category
+     already caused a production incident under a single, wrong signal.
+   - Not found in either, or found only outside the window → candidate,
+     *unless* `created` is more recent than `--years` ago (a template
+     that's simply new shouldn't be flagged just because it hasn't run
+     yet — matches the original rule's never-run-yet handling, and
+     `created` is still trustworthy for this narrow purpose on `"n"`
+     rows specifically).
 3. Owner exclusion: unchanged (`--exclude-owner` / `--exclude-owner-regex`).
 
-`--years` keeps its default of `3`. The original concern about widening
-it (weaker signal deserves a more conservative threshold) doesn't apply
-here — this is direct evidence of execution, not a proxy, so the
-original calibration stands.
+`--years` keeps its default of `3`. This is direct evidence of
+execution, not a proxy, so the original calibration stands.
 
 ## Implementation notes
 
 - **`.Z` decompression**: Python's stdlib `gzip` module cannot read Unix
-  `compress` (`.Z`) format — it's LZW-based, unrelated to DEFLATE. The
-  box has a working `zcat` (confirmed interactively). Shell out to it via
-  `subprocess` (still stdlib-only per the project's Python 3.6.8
-  constraint — this uses an existing system utility, not a pip package).
-- **Performance**: parsing 5+ years of monthly logs on every invocation
-  will be slow and grows monthly. Worth caching the built index (e.g. to
-  a local file keyed by which log files have already been folded in) and
-  only parsing new/changed log files on subsequent runs, rather than a
-  full rebuild each time. Not spec'd in detail here — flagging as a
-  needed design decision before implementation, not a blocker to this
-  redesign's correctness.
-- New internal module (e.g. `rptsched_lib/report_logs.py`) owns log
-  location/parsing/indexing; `templates.py`'s candidate selection
-  consumes the index instead of reading `last_run`/`created` for the
-  inactivity check.
-
-## Operational rollout (matches the plan already in motion)
-
-1. **Clean out what we can now.** The 85% unambiguous case already has
-   5+ years of usable log history — run the new detection logic and
-   execute against genuine candidates immediately, same quarantine/
-   restore mechanics as before (unchanged by this redesign).
-2. **Disambiguate the 15%.** Rename manual templates whose description
-   collides with other owners' (the 220 shared pairs) to include a
-   library/owner prefix, via Symphony's normal template-edit UI — already
-   the convention most WYLD sites follow (`"SHER TS2bibload"`, `"ALBY
-   TS2bibload"`, etc.); it's specifically the un-prefixed generic ones
-   that collide.
-3. **Observe before trusting a rename.** Renaming only disambiguates
-   *future* log entries — historical lines under the old shared
-   description don't retroactively attach to the new name. A one-month
-   observation window (as planned) is enough to catch renewed activity
-   under the new name (if it runs, it's obviously protected), but **is
-   not enough on its own to conclude a freshly-renamed template is
-   stale** — absence of activity in one month is weak evidence against a
-   3-year threshold. During the transition, keep using the old shared
-   key's activity as the operative signal for a freshly-renamed
-   template's group; only let a renamed row be judged independently once
-   it's accumulated close to a full `--years` window of its own history
-   under the new name.
+  `compress` (`.Z`) format. Shell out to `zcat` via `subprocess`
+  (confirmed present on the production box; still stdlib-only per the
+  project's Python 3.6.8 constraint, since this uses an existing system
+  utility, not a pip package).
+- **Read-only discipline**: the entire log-reading phase has zero write
+  access to anything under `Logs/` — no in-place decompression, no temp
+  files written alongside source logs, `zcat`/`logprint`/`translate`
+  used purely as read pipes. Any derived state (the activity-index
+  cache) lives in a file this tool owns, under `--quarantine-dir` by
+  default, never near `Logs/`.
+- **Module layout** (`rptsched_lib/`):
+  - `report_log.py` — `Logs/Report/` parsing. Plain text, no subprocess
+    beyond `zcat` for `.Z` months.
+  - `hist_log.py` — `Logs/Hist/` parsing: raw code pre-filter, `zcat`
+    for `.Z`, `logprint | translate` subprocess pipe for the matched
+    subset, field extraction. Owns the incremental cache for this source
+    specifically, since it's the one actually worth caching.
+  - `activity_index.py` — merges both sources into one lookup ("is
+    `(report_source, description[, owner])` active within N years"),
+    persists the combined cache. `templates.py` depends on this
+    interface only, not on log-parsing internals — keeps it reusable for
+    the still-parked scheduled-report-removal category later.
+  - `templates.py` (existing) — candidate selection swaps its
+    `last_run`/`created` check for an `activity_index` lookup; owner
+    exclusion and the `created`-recency floor stay as they are.
+  - `quarantine.py` / `schedlist.py` (existing) — execute/restore
+    mechanics unchanged by this redesign.
+- New CLI flags on `remove_stale_templates.py`, following the existing
+  "never hardcoded" convention: `--logs-report-dir`, `--logs-hist-dir`
+  (both required, no built-in defaults, same as `--data-dir`), and
+  `--index-cache-path` (optional, defaults under `--quarantine-dir`).
 
 ## Explicitly out of scope (unchanged from original spec)
 
@@ -176,5 +221,6 @@ original calibration stands.
 - Orphans — separate script/spec, already written, untouched by this
   redesign.
 - Concurrency/locking against Symphony's own processes reading/writing
-  `schedlist` or `Logs/Report/` — still out of scope; atomic rename
-  remains the only safety mechanism specified.
+  `schedlist`, `Logs/Report/`, or `Logs/Hist/` — still out of scope;
+  atomic rename remains the only safety mechanism specified, and the log
+  sources are read-only inputs regardless.

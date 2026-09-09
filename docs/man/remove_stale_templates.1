@@ -7,6 +7,11 @@ remove_stale_templates.py \- quarantine stale manual saved templates and prune t
 .I DIR
 .B \-\-quarantine\-dir
 .I DIR
+.B \-\-logs\-report\-dir
+.I DIR
+.B \-\-logs\-hist\-dir
+.I DIR
+[\fB\-\-index\-cache\-path\fR \fIPATH\fR]
 [\fB\-\-years\fR \fIN\fR]
 [\fB\-\-exclude\-owner\fR \fIOWNER\fR ...]
 [\fB\-\-exclude\-owner\-regex\fR \fIPATTERN\fR ...]
@@ -18,6 +23,20 @@ finds
 in a Symphony ILS report\-scheduler data directory (\fIrptsched\fR) and
 moves their files into quarantine, removing the corresponding line from
 .IR schedlist .
+
+Candidate selection does
+.B not
+use \fIschedlist\fR's own \fBlast_run\fR/\fBcreated\fR fields as an
+activity signal \- empirical testing found those fields never update for
+the most common real usage pattern (ad hoc "Run Now" on a manual
+template), which caused a real production incident. Instead, activity is
+looked up in two independent log sources outside \fIrptsched\fR:
+\fILogs/Report/\fR (unconditional \fB"Finished report"\fR lines, no
+owner) and \fILogs/Hist/\fR (owner\-attributed, decoded via Symphony's
+own \fBlogprint\fR | \fBtranslate\fR pipeline, and the only source that
+sees ad hoc runs at all). See
+\fI2026\-08\-31\-remove\-stale\-templates\-log\-based\-redesign.md\fR for
+the full design and empirical basis.
 
 A saved template (one row of \fIschedlist\fR, plus its \fI<id>.set\fR /
 \fI<id>.selans\fR file group) is a stale\-template candidate when
@@ -33,12 +52,17 @@ recurring Symphony schedule.
 is not excluded by any \fB\-\-exclude\-owner\fR or
 \fB\-\-exclude\-owner\-regex\fR entry passed on the command line.
 .IP \(bu 2
-It satisfies the
-.B inactivity rule:
-.B last_run
-is not the "never run" sentinel (\fB0000000000\fR) and is at least
-\fB\-\-years\fR years before today; or, if the template has never been
-run, \fBcreated\fR is at least \fB\-\-years\fR years before today.
+Its \fB(report_source, description)\fR pair shows no activity in
+\fILogs/Report/\fR within \fB\-\-years\fR, \fBand\fR its \fB(report_source,
+description, owner)\fR triple shows no activity in \fILogs/Hist/\fR
+within \fB\-\-years\fR either. A match in \fIeither\fR source protects
+the template \- this is deliberate defense in depth given the category's
+history.
+.IP \(bu 2
+\fBcreated\fR is at least \fB\-\-years\fR years before today \- a
+template that's simply new is protected even with no log activity yet,
+since \fBcreated\fR (unlike \fBlast_run\fR) stays a trustworthy one\-time
+stamp for manual templates specifically.
 .RE
 .PP
 Unlike orphans, every stale\-template candidate has a live \fIschedlist\fR
@@ -56,9 +80,27 @@ every mode, including \fB\-\-restore\fR.
 Path to the quarantine directory that holds run subfolders. Created if it
 does not already exist. Required in every mode.
 .TP
+.BR \-\-logs\-report\-dir " " \fIDIR\fR
+Path to Symphony's \fILogs/Report/\fR directory. Required for dry\-run
+and \fB\-\-execute\fR; not needed for \fB\-\-restore\fR, which replays a
+past run's exact removed lines rather than re\-evaluating activity.
+.TP
+.BR \-\-logs\-hist\-dir " " \fIDIR\fR
+Path to Symphony's \fILogs/Hist/\fR directory. Same required\-ness as
+\fB\-\-logs\-report\-dir\fR. Decoding this source shells out to
+\fBlogprint\fR and \fBtranslate\fR, which only exist on the production
+server.
+.TP
+.BR \-\-index\-cache\-path " " \fIPATH\fR
+Where to persist the activity\-index cache between runs, so unchanged
+\fILogs/Hist/\fR months (the expensive source to decode) aren't
+reprocessed every invocation. Defaults to a file under
+\fB\-\-quarantine\-dir\fR. Only used by \fB\-\-execute\fR \- dry\-run
+never writes anything, including this cache.
+.TP
 .BR \-\-years " " \fIN\fR
-Inactivity threshold in years, applied to both \fBlast_run\fR and, when
-the template has never run, \fBcreated\fR. Default: \fB3\fR.
+Inactivity threshold in years, applied to both the log\-activity lookup
+and, as a floor protecting new templates, \fBcreated\fR. Default: \fB3\fR.
 .TP
 .BR \-\-exclude\-owner " " \fIOWNER\fR
 Exclude templates whose \fBowner\fR is an exact, case\-insensitive match
@@ -87,9 +129,12 @@ re\-insert their removed \fIschedlist\fR lines. Mutually exclusive with
 .SS Dry run (default)
 Prints the count of stale\-template candidates, the total count of manual
 templates in \fIschedlist\fR (regardless of staleness or owner exclusion),
-and total files, then one line per candidate: id, description, owner,
-frequency_flag, created, last_run, and its file list. Nothing on disk is
-touched.
+and total files, then one line per candidate: id, description,
+report_source, owner, frequency_flag, created, and its file list.
+\fBlast_run\fR is deliberately not shown \- it plays no part in the
+decision and displaying it invites the exact misreading that caused the
+original production incident. Nothing on disk is touched, including the
+activity\-index cache.
 .SS Execute
 With \fB\-\-execute\fR, the script:
 .RS
@@ -122,7 +167,10 @@ collision.
 .IP 2. 4
 Reads \fIRUN_DIR\fR/removed_schedlist_lines.txt (if present \- an empty
 result is treated as "no lines to reinsert", not an error) and re\-inserts
-each line into the \fBcurrent\fR schedlist, then re\-sorts the file by id.
+each line into the \fBcurrent\fR schedlist at the position matching its
+\fBcreated\fR timestamp, without disturbing the relative order of any
+line that wasn't touched. \fIschedlist\fR's real on\-disk order is
+chronological by \fBcreated\fR, not alphabetical by id.
 .RE
 .IP
 The re\-insert step is idempotent independently of the file\-restore step:
@@ -137,8 +185,11 @@ candidates, or a restore that skipped everything because it was already
 complete.
 .TP
 .B 1
-A move, schedlist rewrite, or restore operation failed. Details are
-printed to stderr.
+A move, schedlist rewrite, or restore operation failed; or
+\fB\-\-logs\-report\-dir\fR/\fB\-\-logs\-hist\-dir\fR contains zero files
+within \fB\-\-years\fR (refused rather than silently treating every
+manual template as inactive \- likely a wrong or unmounted path).
+Details are printed to stderr.
 .SH FILES
 .TP
 .I <data\-dir>/schedlist
@@ -156,21 +207,21 @@ an audit record.
 .SH EXAMPLES
 .TP
 Preview stale templates using the default 3\-year threshold:
-.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-logs\-report\-dir /software/WYLD/Unicorn/Logs/Report \-\-logs\-hist\-dir /software/WYLD/Unicorn/Logs/Hist
 .TP
 Use a 5\-year threshold instead:
-.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-years 5
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-logs\-report\-dir /software/WYLD/Unicorn/Logs/Report \-\-logs\-hist\-dir /software/WYLD/Unicorn/Logs/Hist \-\-years 5
 .TP
 Execute a run:
-.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-execute
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-logs\-report\-dir /software/WYLD/Unicorn/Logs/Report \-\-logs\-hist\-dir /software/WYLD/Unicorn/Logs/Hist \-\-execute
 .TP
 Exclude a specific list of owners:
-.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-exclude\-owner ACQ1 \-\-exclude\-owner ACQ2
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-logs\-report\-dir /software/WYLD/Unicorn/Logs/Report \-\-logs\-hist\-dir /software/WYLD/Unicorn/Logs/Hist \-\-exclude\-owner ACQ1 \-\-exclude\-owner ACQ2
 .TP
 Exclude any owner containing "ACQ", regardless of case:
-.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-exclude\-owner\-regex ACQ
+.B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-logs\-report\-dir /software/WYLD/Unicorn/Logs/Report \-\-logs\-hist\-dir /software/WYLD/Unicorn/Logs/Hist \-\-exclude\-owner\-regex ACQ
 .TP
-Undo a specific run (files and schedlist lines both):
+Undo a specific run (files and schedlist lines both, no log dirs needed):
 .B remove_stale_templates.py \-\-data\-dir ./rptsched \-\-quarantine\-dir ./quarantine \-\-restore ./quarantine/templates_20260826_140501
 .SH SEE ALSO
 .BR remove_orphans.py (1),

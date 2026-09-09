@@ -3,17 +3,18 @@ from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 
+from rptsched_lib.activity_index import is_active
+
 ID_PATTERN = re.compile(r'^([a-z0-9]{4})\.(.+)$')
-NEVER_RUN = "0000000000"
 DATETIME_FORMAT = "%Y%m%d%H%M"
 
 TemplateCandidate = namedtuple(
     "TemplateCandidate",
-    ["id", "raw_line", "description", "owner", "frequency_flag", "created", "last_run", "filenames"],
+    ["id", "raw_line", "report_source", "description", "owner", "frequency_flag", "created", "last_run", "filenames"],
 )
 
 
-def _years_before(reference, years):
+def years_before(reference, years):
     try:
         return reference.replace(year=reference.year - years)
     except ValueError:
@@ -21,12 +22,11 @@ def _years_before(reference, years):
         return reference.replace(month=2, day=28, year=reference.year - years)
 
 
-def _is_stale(created, last_run, threshold):
-    if last_run != NEVER_RUN:
-        run_date = datetime.strptime(last_run, DATETIME_FORMAT)
-    else:
-        run_date = datetime.strptime(created, DATETIME_FORMAT)
-    return run_date <= threshold
+def _created_within_window(created, threshold):
+    # A template that's simply new shouldn't be flagged just because it
+    # hasn't shown up in logs yet -- created stays a trustworthy one-time
+    # stamp for "n" rows specifically (see rptsched-domain-reference.md).
+    return datetime.strptime(created, DATETIME_FORMAT) > threshold
 
 
 def _group_files_by_id(data_dir: Path):
@@ -62,11 +62,11 @@ def count_manual_templates(data_dir):
     return count
 
 
-def find_stale_template_candidates(data_dir, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
+def find_stale_template_candidates(data_dir, activity_index, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
     data_dir = Path(data_dir)
     if today is None:
         today = datetime.now()
-    threshold = _years_before(today, years)
+    threshold = years_before(today, years)
     compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
 
     file_groups = _group_files_by_id(data_dir)
@@ -79,20 +79,23 @@ def find_stale_template_candidates(data_dir, years=3, today=None, exclude_owners
                 continue
 
             fields = raw_line.split("|")
-            template_id, description, frequency_flag, created, last_run, owner = (
-                fields[0], fields[2], fields[3], fields[4], fields[5], fields[6]
+            template_id, report_source, description, frequency_flag, created, last_run, owner = (
+                fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6]
             )
 
             if frequency_flag != "n":
                 continue
             if _is_excluded_owner(owner, exclude_owners, compiled_regexes):
                 continue
-            if not _is_stale(created, last_run, threshold):
+            if is_active(activity_index, report_source, description, owner):
+                continue
+            if _created_within_window(created, threshold):
                 continue
 
             candidates[template_id] = TemplateCandidate(
                 id=template_id,
                 raw_line=raw_line,
+                report_source=report_source,
                 description=description,
                 owner=owner,
                 frequency_flag=frequency_flag,

@@ -34,6 +34,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--quarantine-dir", required=True, type=Path)
+    parser.add_argument(
+        "--logs-report-dir", required=True, type=Path,
+        help="Forwarded only to remove_stale_templates.",
+    )
+    parser.add_argument(
+        "--logs-hist-dir", required=True, type=Path,
+        help="Forwarded only to remove_stale_templates.",
+    )
     parser.add_argument("--execute", action="store_true")
     parser.add_argument(
         "--exclude-owner", action="append", default=[], metavar="OWNER",
@@ -55,8 +63,9 @@ def _build_argv(data_dir, quarantine_dir, execute):
     return argv
 
 
-def _build_template_argv(base_argv, exclude_owners, exclude_owner_regexes):
+def _build_template_argv(base_argv, logs_report_dir, logs_hist_dir, exclude_owners, exclude_owner_regexes):
     argv = list(base_argv)
+    argv.extend(["--logs-report-dir", str(logs_report_dir), "--logs-hist-dir", str(logs_hist_dir)])
     for owner in exclude_owners:
         argv.extend(["--exclude-owner", owner])
     for pattern in exclude_owner_regexes:
@@ -75,7 +84,9 @@ def main(argv=None) -> int:
     base_argv = _build_argv(args.data_dir, args.quarantine_dir, args.execute)
     script_argvs = {
         "remove_orphans": base_argv,
-        "remove_stale_templates": _build_template_argv(base_argv, args.exclude_owner, args.exclude_owner_regex),
+        "remove_stale_templates": _build_template_argv(
+            base_argv, args.logs_report_dir, args.logs_hist_dir, args.exclude_owner, args.exclude_owner_regex,
+        ),
         "sync_operator_field": base_argv,
     }
 
