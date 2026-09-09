@@ -1,5 +1,34 @@
 import os
 import sys
+from pathlib import Path
+
+UNICORN_ROOT_ENV_VAR = "RPTSCHED_UNICORN_ROOT"
+
+
+def unicorn_root_default():
+    """
+    Wrapper-level convenience only -- the underlying detect_*/execute_*
+    plumbing tools take --data-dir/--logs-report-dir/--logs-hist-dir
+    explicitly with no defaults at all, on purpose (no hidden environment
+    coupling in the composable pieces). This just reads the env var a
+    wrapper's --unicorn-root flag falls back to when not passed.
+    """
+    return os.environ.get(UNICORN_ROOT_ENV_VAR)
+
+
+def unicorn_paths(unicorn_root):
+    """
+    Derive the standard Symphony Unicorn install sub-paths from a root
+    directory: data_dir (Rptsched/), logs_report_dir (Logs/Report/),
+    logs_hist_dir (Logs/Hist/). This relative structure is Symphony's own
+    convention, not a per-site choice -- confirmed by the domain
+    reference and specs, which document all three as sharing the exact
+    same parent (e.g. /software/WYLD/Unicorn/{Rptsched,Logs/Report,
+    Logs/Hist}). The root itself (which site's Unicorn install) is what
+    varies and is never hardcoded here.
+    """
+    root = Path(unicorn_root)
+    return root / "Rptsched", root / "Logs" / "Report", root / "Logs" / "Hist"
 
 
 def run(main_func, argv=None):

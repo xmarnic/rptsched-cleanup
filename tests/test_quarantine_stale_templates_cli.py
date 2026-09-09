@@ -1,9 +1,11 @@
 import io
+import os
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import quarantine_stale_templates
 from tests.fixtures import make_data_dir
@@ -161,6 +163,82 @@ class TestRestoreFlag(unittest.TestCase):
             self.assertIn("Restored", out.getvalue())
             self.assertEqual(sorted(p.name for p in data_dir.iterdir()), files_before)
             self.assertEqual(sorted((data_dir / "schedlist").read_text().splitlines()), schedlist_before)
+
+
+def _make_unicorn_root(tmp, schedlist_lines, extra_files, active_report_sources_and_descriptions=()):
+    root = Path(tmp) / "Unicorn"
+    data_dir = root / "Rptsched"
+    data_dir.mkdir(parents=True)
+    with (data_dir / "schedlist").open("w") as f:
+        for line in schedlist_lines:
+            f.write(line + "\n")
+    for filename in extra_files:
+        (data_dir / filename).write_text("placeholder")
+
+    report_dir, hist_dir = _make_log_dirs(tmp, active_report_sources_and_descriptions)
+    (root / "Logs" / "Report").mkdir(parents=True)
+    (root / "Logs" / "Hist").mkdir(parents=True)
+    for f in report_dir.iterdir():
+        (root / "Logs" / "Report" / f.name).write_text(f.read_text())
+    for f in hist_dir.iterdir():
+        (root / "Logs" / "Hist" / f.name).write_text(f.read_text())
+    return root, data_dir
+
+
+class TestUnicornRoot(unittest.TestCase):
+    def test_flag_derives_all_three_paths(self):
+        with TemporaryDirectory() as tmp:
+            root, data_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
+            work_dir = Path(tmp) / "work"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = quarantine_stale_templates.main([
+                    "--unicorn-root", str(root),
+                    "--work-dir", str(work_dir),
+                ])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("1 candidate(s) detected", out.getvalue())
+
+    def test_env_var_derives_all_three_paths(self):
+        with TemporaryDirectory() as tmp:
+            root, data_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
+            work_dir = Path(tmp) / "work"
+
+            out = io.StringIO()
+            with patch.dict(os.environ, {"RPTSCHED_UNICORN_ROOT": str(root)}):
+                with redirect_stdout(out):
+                    exit_code = quarantine_stale_templates.main(["--work-dir", str(work_dir)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("1 candidate(s) detected", out.getvalue())
+
+    def test_explicit_data_dir_overrides_derived_value(self):
+        with TemporaryDirectory() as tmp:
+            root, unicorn_data_dir = _make_unicorn_root(tmp, [ACTIVE_LINE], ["abcd.set"])
+            override_data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            work_dir = Path(tmp) / "work"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = quarantine_stale_templates.main([
+                    "--unicorn-root", str(root),
+                    "--data-dir", str(override_data_dir),
+                    "--work-dir", str(work_dir),
+                ])
+
+            self.assertEqual(exit_code, 0)
+            # candidate came from the override dir (wxyz), not the
+            # unicorn-root-derived one (which only has abcd, active)
+            self.assertIn("wxyz", (work_dir / "candidates.jsonl").read_text())
+
+    def test_missing_data_dir_and_unicorn_root_errors(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RPTSCHED_UNICORN_ROOT", None)
+            with self.assertRaises(SystemExit):
+                with redirect_stderr(io.StringIO()):
+                    quarantine_stale_templates.main([])
 
 
 if __name__ == "__main__":

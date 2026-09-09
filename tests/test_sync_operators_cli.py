@@ -1,8 +1,10 @@
 import io
+import os
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import sync_operators
 from rptsched_lib.operators import read_operator
@@ -126,6 +128,52 @@ class TestRestoreFlag(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertIn("Restored", out.getvalue())
             self.assertEqual(read_operator(data_dir, "abcd"), "OLDMGR")
+
+
+def _make_unicorn_rptsched_dir(tmp, schedlist_lines):
+    root = Path(tmp) / "Unicorn"
+    data_dir = root / "Rptsched"
+    data_dir.mkdir(parents=True)
+    with (data_dir / "schedlist").open("w") as f:
+        for line in schedlist_lines:
+            f.write(line + "\n")
+    return root, data_dir
+
+
+class TestUnicornRoot(unittest.TestCase):
+    def test_flag_derives_data_dir(self):
+        with TemporaryDirectory() as tmp:
+            root, data_dir = _make_unicorn_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")])
+            _write_set_file(data_dir, "abcd", "OLDMGR")
+            work_dir = Path(tmp) / "work"
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                exit_code = sync_operators.main(["--unicorn-root", str(root), "--work-dir", str(work_dir)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("1 candidate(s) detected", out.getvalue())
+
+    def test_env_var_derives_data_dir(self):
+        with TemporaryDirectory() as tmp:
+            root, data_dir = _make_unicorn_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")])
+            _write_set_file(data_dir, "abcd", "OLDMGR")
+            work_dir = Path(tmp) / "work"
+
+            out = io.StringIO()
+            with patch.dict(os.environ, {"RPTSCHED_UNICORN_ROOT": str(root)}):
+                with redirect_stdout(out):
+                    exit_code = sync_operators.main(["--work-dir", str(work_dir)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("1 candidate(s) detected", out.getvalue())
+
+    def test_missing_data_dir_and_unicorn_root_errors(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RPTSCHED_UNICORN_ROOT", None)
+            with self.assertRaises(SystemExit):
+                with redirect_stderr(io.StringIO()):
+                    sync_operators.main([])
 
 
 if __name__ == "__main__":
