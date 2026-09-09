@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 
 from rptsched_lib.activity_index import ActivityIndex
 from rptsched_lib.templates import count_manual_templates, find_stale_template_candidates
-from tests.fixtures import make_data_dir
+from tests.fixtures import make_rptsched_dir
 
 TODAY = datetime(2026, 7, 24)
 EMPTY_INDEX = ActivityIndex(report_index={}, hist_index={})
@@ -20,9 +20,9 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
     def test_selects_manual_template_with_no_activity_and_old_created(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", created="200207021051")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set", "abcd.selans"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set", "abcd.selans"])
 
-            candidates = find_stale_template_candidates(data_dir, EMPTY_INDEX, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY)
 
             self.assertEqual(set(candidates.keys()), {"abcd"})
             candidate = candidates["abcd"]
@@ -35,27 +35,27 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
             # created a month before TODAY -> well within the 3yr window,
             # protected even though no log activity was ever found
             lines = [_line("abcd", created="202606240000")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
-            candidates = find_stale_template_candidates(data_dir, EMPTY_INDEX, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY)
 
             self.assertEqual(candidates, {})
 
     def test_excludes_recurring_frequency_flag(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", frequency_flag="w1")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
-            candidates = find_stale_template_candidates(data_dir, EMPTY_INDEX, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY)
 
             self.assertEqual(candidates, {})
 
     def test_no_owner_exclusions_by_default(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", owner="ACQ")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
-            candidates = find_stale_template_candidates(data_dir, EMPTY_INDEX, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY)
 
             self.assertEqual(set(candidates.keys()), {"abcd"})
 
@@ -65,10 +65,10 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
                 _line("abcd", owner="acqMGR"),
                 _line("efgh", owner="ACQMGR"),
             ]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set", "efgh.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set", "efgh.set"])
 
             candidates = find_stale_template_candidates(
-                data_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owners=["acqmgr"],
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owners=["acqmgr"],
             )
 
             self.assertEqual(candidates, {})
@@ -77,10 +77,10 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             # exclude_owners=["ACQ1"] should not catch an owner that merely contains "ACQ1"
             lines = [_line("abcd", owner="ACQ10")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
             candidates = find_stale_template_candidates(
-                data_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owners=["ACQ1"],
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owners=["ACQ1"],
             )
 
             self.assertEqual(set(candidates.keys()), {"abcd"})
@@ -88,10 +88,10 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
     def test_exclude_owner_regexes_matches_as_unanchored_substring(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", owner="ACQHQ")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
             candidates = find_stale_template_candidates(
-                data_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owner_regexes=["acq"],
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owner_regexes=["acq"],
             )
 
             self.assertEqual(candidates, {})
@@ -102,10 +102,10 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
                 _line("abcd", owner="ACQ1"),
                 _line("efgh", owner="jsmith-acq"),
             ]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set", "efgh.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set", "efgh.set"])
 
             candidates = find_stale_template_candidates(
-                data_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owner_regexes=["^acq"],
+                rptsched_dir, EMPTY_INDEX, years=3, today=TODAY, exclude_owner_regexes=["^acq"],
             )
 
             self.assertEqual(set(candidates.keys()), {"efgh"})
@@ -113,40 +113,40 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
     def test_report_index_match_excludes_regardless_of_owner(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
             index = ActivityIndex(
                 report_index={("noverdue", "Some Template"): datetime(2026, 6, 1)},
                 hist_index={},
             )
 
-            candidates = find_stale_template_candidates(data_dir, index, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, index, years=3, today=TODAY)
 
             self.assertEqual(candidates, {})
 
     def test_hist_index_match_requires_owner_to_match(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
             # hist activity recorded under a different owner -> shouldn't protect this row
             index = ActivityIndex(
                 report_index={},
                 hist_index={("noverdue", "Some Template", "OTHERMGR"): datetime(2026, 6, 1)},
             )
 
-            candidates = find_stale_template_candidates(data_dir, index, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, index, years=3, today=TODAY)
 
             self.assertEqual(set(candidates.keys()), {"abcd"})
 
     def test_hist_index_match_with_correct_owner_excludes(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
             index = ActivityIndex(
                 report_index={},
                 hist_index={("noverdue", "Some Template", "SOMEMGR"): datetime(2026, 6, 1)},
             )
 
-            candidates = find_stale_template_candidates(data_dir, index, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, index, years=3, today=TODAY)
 
             self.assertEqual(candidates, {})
 
@@ -160,29 +160,29 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
             # years=3, a candidate at years=1, with no activity index
             # involved either way.
             lines = [_line("abcd", created="202501010000")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
-            self.assertEqual(find_stale_template_candidates(data_dir, EMPTY_INDEX, years=3, today=TODAY), {})
+            self.assertEqual(find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY), {})
             self.assertEqual(
-                set(find_stale_template_candidates(data_dir, EMPTY_INDEX, years=1, today=TODAY).keys()),
+                set(find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=1, today=TODAY).keys()),
                 {"abcd"},
             )
 
     def test_candidate_with_no_files_on_disk_has_empty_filenames(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd")]
-            data_dir = make_data_dir(tmp, lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, lines, [])
 
-            candidates = find_stale_template_candidates(data_dir, EMPTY_INDEX, years=3, today=TODAY)
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX, years=3, today=TODAY)
 
             self.assertEqual(candidates["abcd"].filenames, [])
 
     def test_defaults_today_to_now(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("abcd", created="200207021051")]
-            data_dir = make_data_dir(tmp, lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, lines, ["abcd.set"])
 
-            candidates = find_stale_template_candidates(data_dir, EMPTY_INDEX)  # no today= override
+            candidates = find_stale_template_candidates(rptsched_dir, EMPTY_INDEX)  # no today= override
 
             self.assertEqual(set(candidates.keys()), {"abcd"})
 
@@ -195,9 +195,9 @@ class TestCountManualTemplates(unittest.TestCase):
                 _line("bbbb", frequency_flag="w1"),
                 _line("cccc", frequency_flag="n"),
             ]
-            data_dir = make_data_dir(tmp, lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, lines, [])
 
-            self.assertEqual(count_manual_templates(data_dir), 2)
+            self.assertEqual(count_manual_templates(rptsched_dir), 2)
 
     def test_ignores_staleness_and_owner(self):
         with TemporaryDirectory() as tmp:
@@ -205,16 +205,16 @@ class TestCountManualTemplates(unittest.TestCase):
                 _line("aaaa", owner="ACQ"),
                 _line("bbbb", owner="SOMEMGR"),
             ]
-            data_dir = make_data_dir(tmp, lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, lines, [])
 
-            self.assertEqual(count_manual_templates(data_dir), 2)
+            self.assertEqual(count_manual_templates(rptsched_dir), 2)
 
     def test_zero_when_no_manual_templates(self):
         with TemporaryDirectory() as tmp:
             lines = [_line("aaaa", frequency_flag="w1")]
-            data_dir = make_data_dir(tmp, lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, lines, [])
 
-            self.assertEqual(count_manual_templates(data_dir), 0)
+            self.assertEqual(count_manual_templates(rptsched_dir), 0)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from rptsched_lib.schedlist import remove_lines, insert_lines
-from tests.fixtures import make_data_dir
+from tests.fixtures import make_rptsched_dir
 
 
 class TestRemoveLines(unittest.TestCase):
@@ -14,12 +14,12 @@ class TestRemoveLines(unittest.TestCase):
                 "abcd|noverdue|Keep Me|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
                 "wxyz|noverdue|Remove Me|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
 
-            removed = remove_lines(data_dir, {"wxyz"})
+            removed = remove_lines(rptsched_dir, {"wxyz"})
 
             self.assertEqual(removed, [schedlist_lines[1]])
-            remaining = (data_dir / "schedlist").read_text().splitlines()
+            remaining = (rptsched_dir / "schedlist").read_text().splitlines()
             self.assertEqual(remaining, [schedlist_lines[0]])
 
     def test_no_matching_ids_removes_nothing(self):
@@ -27,12 +27,12 @@ class TestRemoveLines(unittest.TestCase):
             schedlist_lines = [
                 "abcd|noverdue|Keep Me|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
 
-            removed = remove_lines(data_dir, {"zzzz"})
+            removed = remove_lines(rptsched_dir, {"zzzz"})
 
             self.assertEqual(removed, [])
-            remaining = (data_dir / "schedlist").read_text().splitlines()
+            remaining = (rptsched_dir / "schedlist").read_text().splitlines()
             self.assertEqual(remaining, schedlist_lines)
 
 
@@ -43,11 +43,11 @@ class TestPermissionsPreserved(unittest.TestCase):
                 "abcd|noverdue|Keep Me|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
                 "wxyz|noverdue|Remove Me|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
-            schedlist_path = data_dir / "schedlist"
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
+            schedlist_path = rptsched_dir / "schedlist"
             os.chmod(str(schedlist_path), 0o640)
 
-            remove_lines(data_dir, {"wxyz"})
+            remove_lines(rptsched_dir, {"wxyz"})
 
             self.assertEqual(oct(os.stat(str(schedlist_path)).st_mode & 0o777), oct(0o640))
 
@@ -56,14 +56,14 @@ class TestPermissionsPreserved(unittest.TestCase):
             schedlist_lines = [
                 "aaaa|noverdue|First|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
-            schedlist_path = data_dir / "schedlist"
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
+            schedlist_path = rptsched_dir / "schedlist"
             os.chmod(str(schedlist_path), 0o644)
             to_insert = [
                 "mmmm|noverdue|Middle|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
 
-            insert_lines(data_dir, to_insert)
+            insert_lines(rptsched_dir, to_insert)
 
             self.assertEqual(oct(os.stat(str(schedlist_path)).st_mode & 0o777), oct(0o644))
 
@@ -78,15 +78,15 @@ class TestInsertLines(unittest.TestCase):
                 "zzzz|noverdue|First|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
                 "aaaa|noverdue|Last|n|200207021053|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
             to_insert = [
                 "mmmm|noverdue|Middle|n|200207021052|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
 
-            result = insert_lines(data_dir, to_insert)
+            result = insert_lines(rptsched_dir, to_insert)
 
             self.assertEqual(result, {"inserted": 1, "skipped": 0})
-            lines = (data_dir / "schedlist").read_text().splitlines()
+            lines = (rptsched_dir / "schedlist").read_text().splitlines()
             self.assertEqual(lines, [schedlist_lines[0], to_insert[0], schedlist_lines[1]])
 
     def test_never_reorders_lines_that_were_not_inserted(self):
@@ -99,12 +99,12 @@ class TestInsertLines(unittest.TestCase):
                 "aswc|assumedlost|B|d1|202607250829|202607240831|SOMEMGR||||||0|3||0|||",
                 "hnkw|assumedlost|C|d1|202607250829|202607240831|SOMEMGR||||||0|3||0|||",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
 
-            result = insert_lines(data_dir, [])
+            result = insert_lines(rptsched_dir, [])
 
             self.assertEqual(result, {"inserted": 0, "skipped": 0})
-            lines = (data_dir / "schedlist").read_text().splitlines()
+            lines = (rptsched_dir / "schedlist").read_text().splitlines()
             self.assertEqual(lines, schedlist_lines)
 
     def test_skips_ids_already_present(self):
@@ -112,30 +112,30 @@ class TestInsertLines(unittest.TestCase):
             schedlist_lines = [
                 "aaaa|noverdue|First|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, [])
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, [])
             # Same id as an existing line, different content — must not duplicate.
             to_insert = [
                 "aaaa|noverdue|Different Content Now|n|200207021051|202001010000|OTHERMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
 
-            result = insert_lines(data_dir, to_insert)
+            result = insert_lines(rptsched_dir, to_insert)
 
             self.assertEqual(result, {"inserted": 0, "skipped": 1})
-            lines = (data_dir / "schedlist").read_text().splitlines()
+            lines = (rptsched_dir / "schedlist").read_text().splitlines()
             self.assertEqual(lines, schedlist_lines)
 
     def test_second_insert_of_same_lines_is_idempotent(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [], [])
+            rptsched_dir = make_rptsched_dir(tmp, [], [])
             to_insert = [
                 "aaaa|noverdue|First|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
 
-            insert_lines(data_dir, to_insert)
-            result = insert_lines(data_dir, to_insert)
+            insert_lines(rptsched_dir, to_insert)
+            result = insert_lines(rptsched_dir, to_insert)
 
             self.assertEqual(result, {"inserted": 0, "skipped": 1})
-            lines = (data_dir / "schedlist").read_text().splitlines()
+            lines = (rptsched_dir / "schedlist").read_text().splitlines()
             self.assertEqual(lines, to_insert)
 
 

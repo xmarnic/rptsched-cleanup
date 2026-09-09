@@ -22,16 +22,16 @@ had to work out schedlist-rewrite safety on top of the same mechanics.
 Both required as CLI arguments, never hardcoded, so the same script runs
 unmodified against a local test copy or the production directory:
 
-- `--data-dir` — path to the Rptsched directory (e.g. local `rptsched/`
+- `--rptsched-dir` — path to the Rptsched directory (e.g. local `rptsched/`
   for testing, `/software/WYLD/Unicorn/Rptsched/` in production).
 - `--quarantine-dir` — path to the quarantine directory (e.g.
   `/software/WYLD/Nic/Scripts/rptsched-cleanup/quarantine/`).
 
 ## Orphan detection
 
-1. Parse `schedlist` in `--data-dir`; collect field-0 (id) values into a
+1. Parse `schedlist` in `--rptsched-dir`; collect field-0 (id) values into a
    set.
-2. List files in `--data-dir` matching `^([a-z0-9]{4})\.(.+)$`.
+2. List files in `--rptsched-dir` matching `^([a-z0-9]{4})\.(.+)$`.
 3. Group matched files by their 4-character id.
 4. Any group whose id is **not** in the `schedlist` id set is an orphan.
    All files in that group (the `.set` plus any companions — `.user`,
@@ -52,7 +52,7 @@ The script has three mutually exclusive modes, selected by flag:
 
 Scans and computes the orphan set, then prints a summary to the console:
 each orphan id and its files. **Nothing is written or moved** — no
-quarantine subfolder, no manifest, no changes to `--data-dir`.
+quarantine subfolder, no manifest, no changes to `--rptsched-dir`.
 
 ### 2. `--execute`
 
@@ -61,7 +61,7 @@ Performs the same scan, then:
 1. Creates `--quarantine-dir` if it doesn't already exist.
 2. Creates a new run subfolder inside it, named
    `orphans_<YYYYMMDD_HHMMSS>` (timestamp = script start time).
-3. Moves every file in every orphan group from `--data-dir` into that
+3. Moves every file in every orphan group from `--rptsched-dir` into that
    subfolder, flat (no further nesting), preserving original filenames.
 4. Writes `manifest.csv` inside that same run subfolder, one row per file
    moved, columns:

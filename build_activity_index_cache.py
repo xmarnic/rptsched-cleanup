@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Keeps one persistent --index-cache-path fresh -- no candidate detection,
-no --data-dir, nothing else. detect_stale_templates.py and
+no --rptsched-dir, nothing else. detect_stale_templates.py and
 execute_stale_templates.py's internal re-detect both read/update the
 same cache path this tool maintains; running this on its own (e.g. via
 cron, or by hand before an interactive detect | report session) means

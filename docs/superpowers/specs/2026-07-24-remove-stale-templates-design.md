@@ -24,7 +24,7 @@ operationally as a manual one going unused.
 
 Both required as CLI arguments, never hardcoded:
 
-- `--data-dir` — path to the Rptsched directory.
+- `--rptsched-dir` — path to the Rptsched directory.
 - `--quarantine-dir` — path to the quarantine directory.
 - `--years` (optional, default `3`) — override for the inactivity
   threshold, for testing the logic against different windows. Production
@@ -71,7 +71,7 @@ Scans `schedlist`, applies candidate selection, and prints a summary line
 by each candidate's id, description, owner, frequency_flag,
 last_run/created, and its files on disk. **Nothing is written or
 moved** — no quarantine subfolder, no manifest, no changes to
-`schedlist` or `--data-dir`.
+`schedlist` or `--rptsched-dir`.
 
 ### 2. `--execute`
 
@@ -93,7 +93,7 @@ moved** — no quarantine subfolder, no manifest, no changes to
      `schedlist` lines that were removed, one per line, unmodified. This
      is the source of truth for restoring schedlist state, not
      `manifest.csv`.
-5. Rewrites `schedlist` in `--data-dir`: build the new content by
+5. Rewrites `schedlist` in `--rptsched-dir`: build the new content by
    filtering out the candidate lines, write to a temp file in the same
    directory, then atomically replace the live `schedlist` (write-temp +
    rename, never an in-place edit) — so a crash mid-write can't leave
@@ -145,7 +145,7 @@ The following logic is common to both `remove_orphans` and
 `remove_stale_templates` and should live in one shared internal module,
 not be duplicated:
 
-- Given a data-dir, quarantine-dir, a run-name prefix (`orphans` or
+- Given a rptsched-dir, quarantine-dir, a run-name prefix (`orphans` or
   `templates`), and a set of target ids: create the timestamped run
   subfolder, move each id's file group into it, write `manifest.csv`.
 - The restore-files-from-manifest step (move `dest_path` back to

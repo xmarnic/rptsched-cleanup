@@ -7,7 +7,7 @@ A thin orchestrator that runs the three existing cleanup scripts —
 that fixed order, stopping immediately if any one fails. It lives at the
 repo root alongside the three scripts it wraps.
 
-Like the three scripts it wraps, `run_all.py` takes `--data-dir` and
+Like the three scripts it wraps, `run_all.py` takes `--rptsched-dir` and
 `--quarantine-dir` as required CLI arguments — never hardcoded. This
 tool is meant to be usable by any consortium running this Symphony
 report-scheduler cleanup, not just WYLD, so nothing in the shared code
@@ -17,7 +17,7 @@ policy choices. WYLD's own production invocation (concrete paths, plus
 wrapper/cron entry, outside this repo, the same way its owner-exclusion
 default does for `remove_stale_templates` on its own.
 
-It passes `--data-dir`/`--quarantine-dir` explicitly to each underlying
+It passes `--rptsched-dir`/`--quarantine-dir` explicitly to each underlying
 script's `main()` as CLI-style args — so the three scripts themselves
 remain untouched, fully parameterized, and independently testable on
 their own.
@@ -39,7 +39,7 @@ combined log (see Logging below).
 
 ## CLI
 
-- `--data-dir` (required) — forwarded to all three scripts.
+- `--rptsched-dir` (required) — forwarded to all three scripts.
 - `--quarantine-dir` (required) — forwarded to all three scripts.
 - `--execute` (optional flag) — absent by default (all three scripts run
   in dry-run mode — nothing written anywhere, consistent with the
@@ -94,12 +94,12 @@ Tests never invoke the real underlying scripts' detection logic:
 - Patch `run_all.remove_orphans.main`, `run_all.remove_stale_templates.main`,
   and `run_all.sync_operator_field.main` with fakes that record the exact
   `argv` they were called with and return a controlled exit code —
-  verifying call order, argument-passing (`--data-dir`, `--quarantine-dir`,
+  verifying call order, argument-passing (`--rptsched-dir`, `--quarantine-dir`,
   and `--execute` forwarding when present), owner-exclusion flags landing
   only in the `remove_stale_templates` call, and stop-on-failure behavior
   (a fake that returns nonzero must prevent the next script's fake from
   being called at all).
-- `--data-dir`/`--quarantine-dir` are passed as ordinary CLI args pointing
+- `--rptsched-dir`/`--quarantine-dir` are passed as ordinary CLI args pointing
   at a temp directory, exactly like the three scripts' own test suites
   already do — no module-level constants to patch.
 

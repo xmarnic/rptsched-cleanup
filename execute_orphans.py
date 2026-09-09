@@ -6,7 +6,7 @@ on) via --candidates-file -- never stdin, since accepting an unreviewed
 pipe input here would defeat the point of the review gate.
 
 Before touching anything, re-runs rptsched_lib.orphans.find_orphan_groups
-fresh against live --data-dir (no copy -- this is about to mutate that
+fresh against live --rptsched-dir (no copy -- this is about to mutate that
 same directory anyway) and diffs it against the reviewed file, per
 reviewed ID: a reviewed ID missing from the fresh result, or present
 with a different (sorted) filename set, means something changed since
@@ -44,7 +44,7 @@ from rptsched_lib.quarantine import (
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--rptsched-dir", required=True, type=Path)
     parser.add_argument("--quarantine-dir", required=True, type=Path)
     parser.add_argument(
         "--candidates-file", type=Path, default=None,
@@ -100,7 +100,7 @@ def main(argv=None) -> int:
         print("No candidates in the reviewed file; nothing to do.")
         return 0
 
-    fresh_groups = find_orphan_groups(args.data_dir)
+    fresh_groups = find_orphan_groups(args.rptsched_dir)
 
     abort_reason = _diff_against_fresh(reviewed, fresh_groups)
     if abort_reason is not None:
@@ -118,7 +118,7 @@ def main(argv=None) -> int:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = make_run_dir(args.quarantine_dir, "orphans", timestamp)
     try:
-        move_groups_to_quarantine(args.data_dir, run_dir, groups, moved_at=timestamp)
+        move_groups_to_quarantine(args.rptsched_dir, run_dir, groups, moved_at=timestamp)
     except QuarantineMoveError as err:
         print(str(err), file=sys.stderr)
         return 1

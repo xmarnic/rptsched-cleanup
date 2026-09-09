@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Human-readable summary of an operator-mismatch candidate stream
-produced by detect_operators.py. Pure stream formatter -- no --data-dir
+produced by detect_operators.py. Pure stream formatter -- no --rptsched-dir
 needed at all, since every field it prints is already in the stream.
 
 Usage:
-    python3 detect_operators.py --data-dir /path/to/rptsched > candidates.jsonl
+    python3 detect_operators.py --rptsched-dir /path/to/rptsched > candidates.jsonl
     python3 report_operators.py < candidates.jsonl
 """
 import argparse

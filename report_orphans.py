@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 Human-readable summary of an orphan candidate stream produced by
-detect_orphans.py. Pure stream formatter -- no --data-dir needed at
+detect_orphans.py. Pure stream formatter -- no --rptsched-dir needed at
 all, since every field it prints (id, filenames) is already in the
 stream.
 
 Usage:
-    python3 detect_orphans.py --data-dir /path/to/rptsched > candidates.jsonl
+    python3 detect_orphans.py --rptsched-dir /path/to/rptsched > candidates.jsonl
     python3 report_orphans.py < candidates.jsonl
 """
 import argparse

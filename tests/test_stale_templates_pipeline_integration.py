@@ -12,7 +12,7 @@ import execute_stale_templates
 import report_stale_templates
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SAMPLE_DATA_DIR = REPO_ROOT / "rptsched"
+SAMPLE_RPTSCHED_DIR = REPO_ROOT / "rptsched"
 LOGS_REPORT_DIR = REPO_ROOT / "logs" / "Report"
 # See tests/test_remove_stale_templates_integration.py for why this points at
 # an empty Hist dir rather than the real logs/Hist/ pull -- logprint/translate
@@ -24,26 +24,26 @@ if LOGS_REPORT_DIR.is_dir():
 
 
 @unittest.skipUnless(
-    SAMPLE_DATA_DIR.is_dir() and LOGS_REPORT_DIR.is_dir(),
+    SAMPLE_RPTSCHED_DIR.is_dir() and LOGS_REPORT_DIR.is_dir(),
     "local rptsched/ and logs/Report/ sample data not present",
 )
 class TestFullPipelineAgainstSampleData(unittest.TestCase):
     def test_detect_report_execute_restore_round_trip(self):
         with TemporaryDirectory() as tmp:
-            data_dir = Path(tmp) / "rptsched"
-            shutil.copytree(SAMPLE_DATA_DIR, data_dir)
+            rptsched_dir = Path(tmp) / "rptsched"
+            shutil.copytree(SAMPLE_RPTSCHED_DIR, rptsched_dir)
             quarantine_dir = Path(tmp) / "quarantine"
             cache_path = Path(tmp) / "activity_index_cache.json"
             candidates_path = Path(tmp) / "candidates.jsonl"
 
-            files_before = sorted(p.name for p in data_dir.iterdir() if p.name != "schedlist")
-            schedlist_lines_before = sorted((data_dir / "schedlist").read_text().splitlines())
+            files_before = sorted(p.name for p in rptsched_dir.iterdir() if p.name != "schedlist")
+            schedlist_lines_before = sorted((rptsched_dir / "schedlist").read_text().splitlines())
 
             # Stage 1: detect.
             detect_out = io.StringIO()
             with redirect_stdout(detect_out):
                 exit_code = detect_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(LOGS_REPORT_DIR),
                     "--logs-hist-dir", str(EMPTY_HIST_DIR),
                     "--index-cache-path", str(cache_path),
@@ -53,15 +53,15 @@ class TestFullPipelineAgainstSampleData(unittest.TestCase):
             records = [json.loads(line) for line in detect_out.getvalue().splitlines() if line.strip()]
             self.assertGreater(len(records), 0)
 
-            # detect must not have touched the live data-dir at all.
-            self.assertEqual(sorted((data_dir / "schedlist").read_text().splitlines()), schedlist_lines_before)
+            # detect must not have touched the live rptsched-dir at all.
+            self.assertEqual(sorted((rptsched_dir / "schedlist").read_text().splitlines()), schedlist_lines_before)
 
             # Stage 2: report (human review step -- just confirm it runs
-            # cleanly against the same candidate file and data-dir).
+            # cleanly against the same candidate file and rptsched-dir).
             report_out = io.StringIO()
             with redirect_stdout(report_out):
                 exit_code = report_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--candidates-file", str(candidates_path),
                 ])
             self.assertEqual(exit_code, 0)
@@ -72,7 +72,7 @@ class TestFullPipelineAgainstSampleData(unittest.TestCase):
             execute_out = io.StringIO()
             with redirect_stdout(execute_out):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(candidates_path),
                     "--logs-report-dir", str(LOGS_REPORT_DIR),
@@ -86,21 +86,21 @@ class TestFullPipelineAgainstSampleData(unittest.TestCase):
             self.assertTrue((run_dir / "removed_schedlist_lines.txt").is_file())
             self.assertTrue((run_dir / "manifest.csv").is_file())
             remaining_ids = {
-                line.split("|")[0] for line in (data_dir / "schedlist").read_text().splitlines() if line.strip()
+                line.split("|")[0] for line in (rptsched_dir / "schedlist").read_text().splitlines() if line.strip()
             }
             self.assertFalse(remaining_ids & {r["id"] for r in records})
 
             # Stage 4: restore.
             with redirect_stdout(io.StringIO()):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--restore", str(run_dir),
                 ])
             self.assertEqual(exit_code, 0)
 
-            files_after = sorted(p.name for p in data_dir.iterdir() if p.name != "schedlist")
-            schedlist_lines_after = sorted((data_dir / "schedlist").read_text().splitlines())
+            files_after = sorted(p.name for p in rptsched_dir.iterdir() if p.name != "schedlist")
+            schedlist_lines_after = sorted((rptsched_dir / "schedlist").read_text().splitlines())
             self.assertEqual(files_before, files_after)
             self.assertEqual(schedlist_lines_before, schedlist_lines_after)
 

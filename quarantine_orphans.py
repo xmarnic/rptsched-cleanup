@@ -16,10 +16,10 @@ it does not silently re-detect first, since that would skip the review
 step. Run without --execute first, look at what it found, then
 --execute once you're satisfied.
 
---data-dir can be derived from a single --unicorn-root (or
+--rptsched-dir can be derived from a single --unicorn-root (or
 RPTSCHED_UNICORN_ROOT env var) instead of passed directly --
 Rptsched/'s location relative to the Unicorn install root is Symphony's
-own convention, not a per-site choice. Pass --data-dir directly to
+own convention, not a per-site choice. Pass --rptsched-dir directly to
 override (e.g. for local testing). --quarantine-dir has no such default
 -- where to park quarantined files is an operator choice, always
 required explicitly with --execute/--restore.
@@ -31,7 +31,7 @@ Usage:
     quarantine_orphans.py --quarantine-dir Q --restore RUN_DIR
 
     # or fully explicit, e.g. for local testing:
-    quarantine_orphans.py --data-dir D --report
+    quarantine_orphans.py --rptsched-dir D --report
 """
 import argparse
 import io
@@ -52,10 +52,10 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--unicorn-root", type=Path, default=unicorn_root_default(),
-        help="Symphony Unicorn install root (or set RPTSCHED_UNICORN_ROOT). Derives --data-dir "
+        help="Symphony Unicorn install root (or set RPTSCHED_UNICORN_ROOT). Derives --rptsched-dir "
              "when it isn't passed directly.",
     )
-    parser.add_argument("--data-dir", type=Path, default=None)
+    parser.add_argument("--rptsched-dir", type=Path, default=None)
     parser.add_argument("--quarantine-dir", type=Path, help="Required with --execute/--restore.")
     parser.add_argument(
         "--work-dir", type=Path, default=DEFAULT_WORK_DIR,
@@ -72,7 +72,7 @@ def build_parser():
 def _run_detect(args, candidates_path):
     buf = io.StringIO()
     with redirect_stdout(buf):
-        exit_code = detect_orphans.main(["--data-dir", str(args.data_dir)])
+        exit_code = detect_orphans.main(["--rptsched-dir", str(args.rptsched_dir)])
     if exit_code != 0:
         return exit_code
     candidates_path.write_text(buf.getvalue())
@@ -85,7 +85,7 @@ def _run_report(candidates_path):
 
 def _run_execute(args, candidates_path):
     return execute_orphans.main([
-        "--data-dir", str(args.data_dir),
+        "--rptsched-dir", str(args.rptsched_dir),
         "--quarantine-dir", str(args.quarantine_dir),
         "--candidates-file", str(candidates_path),
     ])
@@ -93,7 +93,7 @@ def _run_execute(args, candidates_path):
 
 def _run_restore(args):
     return execute_orphans.main([
-        "--data-dir", str(args.data_dir),
+        "--rptsched-dir", str(args.rptsched_dir),
         "--quarantine-dir", str(args.quarantine_dir),
         "--restore", str(args.restore),
     ])
@@ -103,10 +103,10 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.data_dir is None and args.unicorn_root is not None:
-        args.data_dir, _, _ = unicorn_paths(args.unicorn_root)
-    if args.data_dir is None:
-        parser.error("--data-dir is required (or set --unicorn-root / RPTSCHED_UNICORN_ROOT)")
+    if args.rptsched_dir is None and args.unicorn_root is not None:
+        args.rptsched_dir, _, _ = unicorn_paths(args.unicorn_root)
+    if args.rptsched_dir is None:
+        parser.error("--rptsched-dir is required (or set --unicorn-root / RPTSCHED_UNICORN_ROOT)")
 
     if args.restore:
         if args.quarantine_dir is None:

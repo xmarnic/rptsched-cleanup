@@ -7,7 +7,7 @@ stdin, since accepting an unreviewed pipe input here would defeat the
 point of the review gate.
 
 Before touching anything, re-runs detect_stale_templates() fresh
-against live --data-dir (no copy -- this is about to mutate that same
+against live --rptsched-dir (no copy -- this is about to mutate that same
 directory anyway, so copying it first would be a wasted second copy
 immediately before the real one) and diffs it against the reviewed
 file, per reviewed ID:
@@ -64,7 +64,7 @@ REMOVED_LINES_FILENAME = "removed_schedlist_lines.txt"
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--rptsched-dir", required=True, type=Path)
     parser.add_argument("--quarantine-dir", required=True, type=Path)
     parser.add_argument(
         "--candidates-file", type=Path, default=None,
@@ -131,7 +131,7 @@ def _do_restore(args):
         return 1
 
     removed_lines = _read_removed_lines(args.restore)
-    schedlist_result = insert_lines(args.data_dir, removed_lines)
+    schedlist_result = insert_lines(args.rptsched_dir, removed_lines)
 
     print("Restored {} file(s), skipped {} already-restored".format(
         file_result["restored"], file_result["skipped"]))
@@ -160,7 +160,7 @@ def main(argv=None) -> int:
     today = datetime.now()
     try:
         fresh_candidates = detect_stale_templates(
-            args.data_dir, args.logs_report_dir, args.logs_hist_dir,
+            args.rptsched_dir, args.logs_report_dir, args.logs_hist_dir,
             years=args.years, today=today,
             exclude_owners=args.exclude_owner, exclude_owner_regexes=args.exclude_owner_regex,
             index_cache_path=args.index_cache_path,
@@ -188,7 +188,7 @@ def main(argv=None) -> int:
     timestamp = today.strftime("%Y%m%d_%H%M%S")
     run_dir = make_run_dir(args.quarantine_dir, "templates", timestamp)
     try:
-        move_groups_to_quarantine(args.data_dir, run_dir, groups, moved_at=timestamp)
+        move_groups_to_quarantine(args.rptsched_dir, run_dir, groups, moved_at=timestamp)
     except QuarantineMoveError as err:
         all_filenames = [
             filename
@@ -206,7 +206,7 @@ def main(argv=None) -> int:
 
     removed_lines = [to_remove[template_id].raw_line for template_id in sorted(to_remove)]
     _write_removed_lines(run_dir, removed_lines)
-    remove_lines(args.data_dir, set(to_remove.keys()))
+    remove_lines(args.rptsched_dir, set(to_remove.keys()))
 
     print("Moved {} file(s) across {} stale template(s) into {}".format(
         total_files, len(to_remove), run_dir))

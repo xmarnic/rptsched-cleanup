@@ -6,7 +6,7 @@ REVIEWED JSONL file (the literal artifact a human signed off on) via
 execute_orphans.py's reasoning.
 
 Before touching anything, validates every reviewed ID against LIVE
---data-dir, in two steps:
+--rptsched-dir, in two steps:
 
   1. The current schedlist owner for that ID must still equal the
      reviewed new_operator -- otherwise the schedlist owner changed
@@ -55,7 +55,7 @@ from rptsched_lib.quarantine import InvalidManifestError, make_run_dir
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--rptsched-dir", required=True, type=Path)
     parser.add_argument("--quarantine-dir", required=True, type=Path)
     parser.add_argument(
         "--candidates-file", type=Path, default=None,
@@ -76,12 +76,12 @@ def _read_reviewed_candidates(candidates_file: Path):
     return reviewed
 
 
-def _validate_and_classify(data_dir, reviewed):
+def _validate_and_classify(rptsched_dir, reviewed):
     """
     Returns (classifications, None) on success, or (None, reason) if any
     reviewed ID should abort the whole batch.
     """
-    owners = read_schedlist_owners(data_dir)
+    owners = read_schedlist_owners(rptsched_dir)
     classifications = {}
     for template_id, record in reviewed.items():
         current_owner = owners.get(template_id)
@@ -90,7 +90,7 @@ def _validate_and_classify(data_dir, reviewed):
                 "{}: schedlist owner changed since review (now {!r}, reviewed expected {!r})".format(
                     template_id, current_owner, record["new_operator"])
             )
-        current_operator = read_operator(data_dir, template_id)
+        current_operator = read_operator(rptsched_dir, template_id)
         classification = classify_current_value(current_operator, record["old_operator"], record["new_operator"])
         if classification == "conflict":
             return None, (
@@ -112,7 +112,7 @@ def _do_restore(args):
     skipped = 0
     for row in rows:
         template_id = row["id"]
-        current = read_operator(args.data_dir, template_id)
+        current = read_operator(args.rptsched_dir, template_id)
         classification = classify_current_value(current, row["old_operator"], row["new_operator"])
 
         if classification == "matches_old":
@@ -120,7 +120,7 @@ def _do_restore(args):
             continue
         if classification == "matches_new":
             try:
-                rewrite_operator(args.data_dir, template_id, row["old_operator"])
+                rewrite_operator(args.rptsched_dir, template_id, row["old_operator"])
             except OSError as err:
                 print("Failed to restore operator for {}: {}".format(template_id, err), file=sys.stderr)
                 return 1
@@ -154,7 +154,7 @@ def main(argv=None) -> int:
         print("No candidates in the reviewed file; nothing to do.")
         return 0
 
-    classifications, abort_reason = _validate_and_classify(args.data_dir, reviewed)
+    classifications, abort_reason = _validate_and_classify(args.rptsched_dir, reviewed)
     if abort_reason is not None:
         print(
             "Refusing to proceed -- the reviewed candidate file no longer matches live data: "
@@ -167,7 +167,7 @@ def main(argv=None) -> int:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = make_run_dir(args.quarantine_dir, "operators", timestamp)
     try:
-        rows = apply_reviewed_changes(args.data_dir, run_dir, reviewed, classifications)
+        rows = apply_reviewed_changes(args.rptsched_dir, run_dir, reviewed, classifications)
     except OperatorRewriteError as err:
         print(str(err), file=sys.stderr)
         return 1

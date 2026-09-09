@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import execute_stale_templates
-from tests.fixtures import make_data_dir
+from tests.fixtures import make_rptsched_dir
 
 STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
 ANOTHER_STALE_LINE = "qmzk|noverdue|Another Stale One|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
@@ -43,7 +43,7 @@ def _reviewed_file_for(tmp, template_id, raw_line, filenames):
 class TestExecute(unittest.TestCase):
     def test_moves_files_and_rewrites_schedlist(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             reviewed_file = _reviewed_file_for(tmp, "wxyz", STALE_LINE, ["wxyz.set", "wxyz.selans"])
@@ -51,7 +51,7 @@ class TestExecute(unittest.TestCase):
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(reviewed_file),
                     "--logs-report-dir", str(report_dir),
@@ -60,15 +60,15 @@ class TestExecute(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertIn("Moved 2 file(s)", out.getvalue())
-            self.assertFalse((data_dir / "wxyz.set").exists())
-            self.assertFalse((data_dir / "wxyz.selans").exists())
-            self.assertTrue((data_dir / "abcd.set").exists())
-            remaining_ids = {line.split("|")[0] for line in (data_dir / "schedlist").read_text().splitlines() if line.strip()}
+            self.assertFalse((rptsched_dir / "wxyz.set").exists())
+            self.assertFalse((rptsched_dir / "wxyz.selans").exists())
+            self.assertTrue((rptsched_dir / "abcd.set").exists())
+            remaining_ids = {line.split("|")[0] for line in (rptsched_dir / "schedlist").read_text().splitlines() if line.strip()}
             self.assertEqual(remaining_ids, {"abcd"})
 
     def test_aborts_when_schedlist_line_changed_since_review(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp)
             # Reviewed file captures the OLD raw_line, before schedlist changed.
@@ -76,12 +76,12 @@ class TestExecute(unittest.TestCase):
 
             # Simulate drift: owner changed in schedlist after review.
             changed_line = STALE_LINE.replace("SOMEMGR", "OTHERMGR")
-            (data_dir / "schedlist").write_text(changed_line + "\n")
+            (rptsched_dir / "schedlist").write_text(changed_line + "\n")
 
             err = io.StringIO()
             with redirect_stdout(io.StringIO()), redirect_stderr(err):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(reviewed_file),
                     "--logs-report-dir", str(report_dir),
@@ -90,12 +90,12 @@ class TestExecute(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             self.assertIn("Refusing to proceed", err.getvalue())
-            self.assertTrue((data_dir / "wxyz.set").exists())
+            self.assertTrue((rptsched_dir / "wxyz.set").exists())
             self.assertFalse(quarantine_dir.exists())
 
     def test_aborts_when_reviewed_id_no_longer_a_candidate(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Stale Template")])
             reviewed_file = _reviewed_file_for(tmp, "wxyz", STALE_LINE, ["wxyz.set", "wxyz.selans"])
@@ -103,7 +103,7 @@ class TestExecute(unittest.TestCase):
             err = io.StringIO()
             with redirect_stdout(io.StringIO()), redirect_stderr(err):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(reviewed_file),
                     "--logs-report-dir", str(report_dir),
@@ -112,11 +112,11 @@ class TestExecute(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             self.assertIn("no longer a stale candidate", err.getvalue())
-            self.assertTrue((data_dir / "wxyz.set").exists())
+            self.assertTrue((rptsched_dir / "wxyz.set").exists())
 
     def test_ignores_new_candidate_not_in_reviewed_file(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(
+            rptsched_dir = make_rptsched_dir(
                 tmp, [STALE_LINE, ANOTHER_STALE_LINE], ["wxyz.set", "wxyz.selans", "qmzk.set"],
             )
             quarantine_dir = Path(tmp) / "quarantine"
@@ -127,7 +127,7 @@ class TestExecute(unittest.TestCase):
 
             with redirect_stdout(io.StringIO()):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(reviewed_file),
                     "--logs-report-dir", str(report_dir),
@@ -135,14 +135,14 @@ class TestExecute(unittest.TestCase):
                 ])
 
             self.assertEqual(exit_code, 0)
-            self.assertFalse((data_dir / "wxyz.set").exists())
-            self.assertTrue((data_dir / "qmzk.set").exists())
-            remaining_ids = {line.split("|")[0] for line in (data_dir / "schedlist").read_text().splitlines() if line.strip()}
+            self.assertFalse((rptsched_dir / "wxyz.set").exists())
+            self.assertTrue((rptsched_dir / "qmzk.set").exists())
+            remaining_ids = {line.split("|")[0] for line in (rptsched_dir / "schedlist").read_text().splitlines() if line.strip()}
             self.assertEqual(remaining_ids, {"qmzk"})
 
     def test_empty_reviewed_file_does_nothing(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp)
             reviewed_file = Path(tmp) / "empty.jsonl"
@@ -151,7 +151,7 @@ class TestExecute(unittest.TestCase):
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(reviewed_file),
                     "--logs-report-dir", str(report_dir),
@@ -166,17 +166,17 @@ class TestExecute(unittest.TestCase):
 class TestRestore(unittest.TestCase):
     def test_execute_then_restore_round_trips_cleanly(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             reviewed_file = _reviewed_file_for(tmp, "wxyz", STALE_LINE, ["wxyz.set", "wxyz.selans"])
 
-            files_before = sorted(p.name for p in data_dir.iterdir() if p.name != "schedlist")
-            schedlist_before = sorted((data_dir / "schedlist").read_text().splitlines())
+            files_before = sorted(p.name for p in rptsched_dir.iterdir() if p.name != "schedlist")
+            schedlist_before = sorted((rptsched_dir / "schedlist").read_text().splitlines())
 
             with redirect_stdout(io.StringIO()):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--candidates-file", str(reviewed_file),
                     "--logs-report-dir", str(report_dir),
@@ -190,14 +190,14 @@ class TestRestore(unittest.TestCase):
 
             with redirect_stdout(io.StringIO()):
                 exit_code = execute_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--restore", str(run_dir),
                 ])
             self.assertEqual(exit_code, 0)
 
-            files_after = sorted(p.name for p in data_dir.iterdir() if p.name != "schedlist")
-            schedlist_after = sorted((data_dir / "schedlist").read_text().splitlines())
+            files_after = sorted(p.name for p in rptsched_dir.iterdir() if p.name != "schedlist")
+            schedlist_after = sorted((rptsched_dir / "schedlist").read_text().splitlines())
             self.assertEqual(files_before, files_after)
             self.assertEqual(schedlist_before, schedlist_after)
 

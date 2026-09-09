@@ -47,15 +47,15 @@ def build_index(logs_report_dir, logs_hist_dir, years=3, today=None, index_cache
 
 
 def detect_stale_templates(
-    data_dir, logs_report_dir, logs_hist_dir, years=3, today=None,
+    rptsched_dir, logs_report_dir, logs_hist_dir, years=3, today=None,
     exclude_owners=(), exclude_owner_regexes=(), index_cache_path=None,
 ):
     """
     The copy-free core of stale-template detection: builds the activity
     index and returns the stale-candidate dict, against whatever
-    data_dir/log dirs it's given -- live or a copy, this function doesn't
-    know or care. detect_stale_templates.py's CLI copies data_dir first;
-    execute_stale_templates.py calls this directly against live data_dir
+    rptsched_dir/log dirs it's given -- live or a copy, this function doesn't
+    know or care. detect_stale_templates.py's CLI copies rptsched_dir first;
+    execute_stale_templates.py calls this directly against live rptsched_dir
     for its pre-mutation re-verification, since it's about to mutate that
     same directory anyway and copying it first would be a wasted second
     copy immediately before the real one.
@@ -73,6 +73,6 @@ def detect_stale_templates(
     )
 
     return find_stale_template_candidates(
-        data_dir, activity_index, years=years, today=today,
+        rptsched_dir, activity_index, years=years, today=today,
         exclude_owners=exclude_owners, exclude_owner_regexes=exclude_owner_regexes,
     )

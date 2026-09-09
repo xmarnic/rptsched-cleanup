@@ -4,18 +4,18 @@ from pathlib import Path
 ID_PATTERN = re.compile(r'^([a-z0-9]{4})\.(.+)$')
 
 
-def find_orphan_groups(data_dir: Path):
-    data_dir = Path(data_dir)
+def find_orphan_groups(rptsched_dir: Path):
+    rptsched_dir = Path(rptsched_dir)
     schedlist_ids = set()
 
-    with (data_dir / "schedlist").open() as f:
+    with (rptsched_dir / "schedlist").open() as f:
         for line in f:
             if not line.strip():
                 continue
             schedlist_ids.add(line.split("|")[0])
 
     groups = {}
-    for entry in data_dir.iterdir():
+    for entry in rptsched_dir.iterdir():
         if not entry.is_file():
             continue
         match = ID_PATTERN.match(entry.name)

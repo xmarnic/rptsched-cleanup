@@ -7,13 +7,13 @@ operator line) are printed as WARNINGs to stderr, same as the old
 dry-run behavior -- they aren't mismatches, so they don't belong in the
 candidate stream.
 
-Copies --data-dir before reading it, same reasoning as
+Copies --rptsched-dir before reading it, same reasoning as
 detect_stale_templates.py/detect_orphans.py. execute_operators.py reads
 the live .set/schedlist values directly for its pre-mutation check
 instead of shelling out to this CLI.
 
 Usage:
-    python3 detect_operators.py --data-dir /path/to/rptsched > candidates.jsonl
+    python3 detect_operators.py --rptsched-dir /path/to/rptsched > candidates.jsonl
 """
 import argparse
 import json
@@ -30,7 +30,7 @@ SCHEMA_VERSION = 1
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--rptsched-dir", required=True, type=Path)
     return parser
 
 
@@ -39,8 +39,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     with TemporaryDirectory(prefix="detect_operators_") as tmp:
-        data_copy = Path(tmp) / "data_dir_copy"
-        shutil.copytree(args.data_dir, data_copy)
+        data_copy = Path(tmp) / "rptsched_dir_copy"
+        shutil.copytree(args.rptsched_dir, data_copy)
         mismatches, skipped = find_operator_mismatches(data_copy)
 
     for skip in skipped:

@@ -51,8 +51,8 @@ except a shared log tee and a stop-on-failure check.
 
 ### `remove_orphans.py` + `rptsched_lib/orphans.py` — the clean reference case
 
-Detection: `orphans.find_orphan_groups(data_dir)` (`orphans.py:7-27`) —
-reads `schedlist` for the set of known ids, scans `data_dir` for
+Detection: `orphans.find_orphan_groups(rptsched_dir)` (`orphans.py:7-27`) —
+reads `schedlist` for the set of known ids, scans `rptsched_dir` for
 `<id>.*` groups not in that set. Plumbing: fully delegates to
 `rptsched_lib/quarantine.py` — `make_run_dir`, `move_groups_to_quarantine`,
 `restore_run`, no local reimplementation of any of it
@@ -110,7 +110,7 @@ three others in-process.
 
 ### `tools/schedlist_report.py` — half of the target shape, already
 
-Copies `--data-dir` before reading anything (`schedlist` is a single
+Copies `--rptsched-dir` before reading anything (`schedlist` is a single
 flat-file index for the entire report scheduler — not a file to risk
 touching directly for a read-only tool), calls the same detection
 functions `remove_stale_templates.py` calls, and only then formats a
@@ -166,14 +166,14 @@ the diff mechanics below.
 
 ### `detect-<category>`
 
-Pure detection, nothing else. The CLI layer copies `--data-dir` first
+Pure detection, nothing else. The CLI layer copies `--rptsched-dir` first
 (matching what `schedlist_report.py` already does, for the same reason —
 `schedlist` is too sensitive to read from a script that might one day
 also write) and calls a **copy-free core library function** to do the
 actual detection. The copy is a thin CLI-level wrapper around that core
 function, not baked into it — deliberately, so `execute`'s internal
 re-detect (below) can call the same core function directly against live
-`--data-dir` without paying a second ~12,000-file copy on every mutating
+`--rptsched-dir` without paying a second ~12,000-file copy on every mutating
 run, immediately before it's about to mutate that same live directory
 anyway under its own atomic-write discipline.
 
@@ -183,7 +183,7 @@ why that's a deliberate, stated exception and not a regression).
 
 ### `report-<category>`
 
-Reads a JSONL stream (stdin or a file) plus `--data-dir` as a required
+Reads a JSONL stream (stdin or a file) plus `--rptsched-dir` as a required
 companion argument. Taking a filesystem argument alongside a stream is
 ordinary Unix practice, not a purity violation — `grep -f patternfile`,
 `rsync --files-from=list src dst` do the same.
@@ -208,11 +208,11 @@ to fix.
 ### `execute-<category>`
 
 Reads a **reviewed** JSONL file — the literal artifact a human signed
-off on — plus `--data-dir` and `--quarantine-dir`. Before mutating
+off on — plus `--rptsched-dir` and `--quarantine-dir`. Before mutating
 anything:
 
 1. Re-runs `detect-<category>`'s core (copy-free) function fresh
-   against live `--data-dir`.
+   against live `--rptsched-dir`.
 2. Diffs the reviewed file against the fresh result **per-ID, not as
    whole-stream equality**:
    - A reviewed ID missing from the fresh result, or present in both but
@@ -320,7 +320,7 @@ accident of one script's internals:
 
 | Guarantee | Status under the split |
 |---|---|
-| Dry-run writes nothing | **Re-scoped, deliberately.** `detect`/`report` write nothing to `--data-dir` or `--quarantine-dir` — but `detect-stale-templates` *does* write to the shared `--index-cache-path` by design, since that's disposable derived cache state, not production data or an audit artifact. Stated here explicitly so it reads as an intentional exception, not a silent regression from today's literal "writes nothing" wording. |
+| Dry-run writes nothing | **Re-scoped, deliberately.** `detect`/`report` write nothing to `--rptsched-dir` or `--quarantine-dir` — but `detect-stale-templates` *does* write to the shared `--index-cache-path` by design, since that's disposable derived cache state, not production data or an audit artifact. Stated here explicitly so it reads as an intentional exception, not a silent regression from today's literal "writes nothing" wording. |
 | Quarantine is always a move, never a delete | Unchanged — enforced entirely inside `execute`/`quarantine.py`, untouched by the split. |
 | `--restore` is idempotent and resumable | Unchanged mechanically, but now depends on a sequencing rule that didn't need stating before: the execute-time diff check must precede `make_run_dir`, so an abort never leaves a manifest-less run directory that would violate "every run dir has a manifest." |
 | Schedlist restore preserves creation order, idempotent by id | Unchanged mechanically, but now depends explicitly on `execute` persisting the restore sidecar from the **fresh re-detect's** values, not the reviewed file's — stated as a hard requirement here so a future simplification doesn't quietly source it from the reviewed file instead (they'll usually match, which is exactly what would make the bug hard to notice). |

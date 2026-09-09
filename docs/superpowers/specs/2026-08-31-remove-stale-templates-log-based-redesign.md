@@ -211,7 +211,7 @@ execution, not a proxy, so the original calibration stands.
     mechanics unchanged by this redesign.
 - New CLI flags on `remove_stale_templates.py`, following the existing
   "never hardcoded" convention: `--logs-report-dir`, `--logs-hist-dir`
-  (both required, no built-in defaults, same as `--data-dir`), and
+  (both required, no built-in defaults, same as `--rptsched-dir`), and
   `--index-cache-path` (optional, defaults under `--quarantine-dir`).
 
 ## Explicitly out of scope (unchanged from original spec)

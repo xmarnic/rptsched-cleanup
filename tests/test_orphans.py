@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from rptsched_lib.orphans import find_orphan_groups
-from tests.fixtures import make_data_dir
+from tests.fixtures import make_rptsched_dir
 
 
 class TestFindOrphanGroups(unittest.TestCase):
@@ -17,9 +17,9 @@ class TestFindOrphanGroups(unittest.TestCase):
                 "wxyz.set", "wxyz.user",    # no schedlist line -> orphan
                 "schedid", "schedid.migr",  # not 4-char-id pattern -> ignored
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, extra_files)
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, extra_files)
 
-            orphans = find_orphan_groups(data_dir)
+            orphans = find_orphan_groups(rptsched_dir)
 
             self.assertEqual(set(orphans.keys()), {"wxyz"})
             self.assertEqual(sorted(orphans["wxyz"]), ["wxyz.set", "wxyz.user"])
@@ -29,9 +29,9 @@ class TestFindOrphanGroups(unittest.TestCase):
             schedlist_lines = [
                 "abcd|noverdue|Known Template|n|200207021051|200507270844|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|",
             ]
-            data_dir = make_data_dir(tmp, schedlist_lines, ["abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, schedlist_lines, ["abcd.set"])
 
-            orphans = find_orphan_groups(data_dir)
+            orphans = find_orphan_groups(rptsched_dir)
 
             self.assertEqual(orphans, {})
 

@@ -26,9 +26,9 @@ class TestDefaultWorkDir(unittest.TestCase):
 
 class TestUnicornPaths(unittest.TestCase):
     def test_derives_all_three_standard_subpaths(self):
-        data_dir, logs_report_dir, logs_hist_dir = unicorn_paths("/software/WYLD/Unicorn")
+        rptsched_dir, logs_report_dir, logs_hist_dir = unicorn_paths("/software/WYLD/Unicorn")
 
-        self.assertEqual(data_dir, Path("/software/WYLD/Unicorn/Rptsched"))
+        self.assertEqual(rptsched_dir, Path("/software/WYLD/Unicorn/Rptsched"))
         self.assertEqual(logs_report_dir, Path("/software/WYLD/Unicorn/Logs/Report"))
         self.assertEqual(logs_hist_dir, Path("/software/WYLD/Unicorn/Logs/Hist"))
 

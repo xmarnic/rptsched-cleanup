@@ -2,11 +2,11 @@
 """
 Human-readable analysis of a stale-templates candidate stream produced
 by detect_stale_templates.py. Reads JSONL (stdin by default, or
---candidates-file) plus --data-dir -- never recomputes the activity
+--candidates-file) plus --rptsched-dir -- never recomputes the activity
 index or the candidate list itself, so this tool has no --logs-report-dir/
 --logs-hist-dir/--index-cache-path of its own.
 
---data-dir is copied first, same reasoning as detect_stale_templates.py:
+--rptsched-dir is copied first, same reasoning as detect_stale_templates.py:
 schedlist is a single flat-file index for the entire report scheduler,
 too sensitive to read directly from a tool that only ever needs read
 access.
@@ -29,9 +29,9 @@ detect_stale_templates.py, so the active-population complement lines up
 with what was actually excluded during detection.
 
 Usage:
-    python3 detect_stale_templates.py --data-dir ... --logs-report-dir ... \
+    python3 detect_stale_templates.py --rptsched-dir ... --logs-report-dir ... \
         --logs-hist-dir ... --index-cache-path ... > candidates.jsonl
-    python3 report_stale_templates.py --data-dir /path/to/rptsched < candidates.jsonl
+    python3 report_stale_templates.py --rptsched-dir /path/to/rptsched < candidates.jsonl
 """
 import argparse
 import json
@@ -50,7 +50,7 @@ ActiveTemplate = namedtuple("ActiveTemplate", ["id", "report_source", "descripti
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--rptsched-dir", required=True, type=Path)
     parser.add_argument(
         "--candidates-file", type=Path, default=None,
         help="JSONL candidate stream. Defaults to stdin.",
@@ -75,10 +75,10 @@ def _read_candidates(candidates_file):
             lines.close()
 
 
-def _collect_active_manual_templates(data_dir, candidate_ids, exclude_owners, exclude_owner_regexes):
+def _collect_active_manual_templates(rptsched_dir, candidate_ids, exclude_owners, exclude_owner_regexes):
     compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
     templates = []
-    with (data_dir / "schedlist").open() as f:
+    with (rptsched_dir / "schedlist").open() as f:
         for line in f:
             raw_line = line.rstrip("\n")
             if not raw_line.strip():
@@ -132,8 +132,8 @@ def main(argv=None):
         return 0
 
     with TemporaryDirectory(prefix="report_stale_templates_") as tmp:
-        data_copy = Path(tmp) / "data_dir_copy"
-        shutil.copytree(args.data_dir, data_copy)
+        data_copy = Path(tmp) / "rptsched_dir_copy"
+        shutil.copytree(args.rptsched_dir, data_copy)
 
         total_manual = count_manual_templates(data_copy)
 

@@ -11,9 +11,9 @@ def _read_lines(schedlist_path: Path):
         return [line.rstrip("\n") for line in f if line.strip()]
 
 
-def remove_lines(data_dir, ids_to_remove) -> list:
-    data_dir = Path(data_dir)
-    schedlist_path = data_dir / SCHEDLIST_FILENAME
+def remove_lines(rptsched_dir, ids_to_remove) -> list:
+    rptsched_dir = Path(rptsched_dir)
+    schedlist_path = rptsched_dir / SCHEDLIST_FILENAME
     ids_to_remove = set(ids_to_remove)
 
     remaining = []
@@ -29,9 +29,9 @@ def remove_lines(data_dir, ids_to_remove) -> list:
     return removed
 
 
-def insert_lines(data_dir, lines_to_insert) -> dict:
-    data_dir = Path(data_dir)
-    schedlist_path = data_dir / SCHEDLIST_FILENAME
+def insert_lines(rptsched_dir, lines_to_insert) -> dict:
+    rptsched_dir = Path(rptsched_dir)
+    schedlist_path = rptsched_dir / SCHEDLIST_FILENAME
 
     current_lines = _read_lines(schedlist_path)
     current_ids = {line.split("|")[0] for line in current_lines}

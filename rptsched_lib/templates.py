@@ -29,9 +29,9 @@ def _created_within_window(created, threshold):
     return datetime.strptime(created, DATETIME_FORMAT) > threshold
 
 
-def _group_files_by_id(data_dir: Path):
+def _group_files_by_id(rptsched_dir: Path):
     groups = {}
-    for entry in data_dir.iterdir():
+    for entry in rptsched_dir.iterdir():
         if not entry.is_file():
             continue
         match = ID_PATTERN.match(entry.name)
@@ -48,10 +48,10 @@ def _is_excluded_owner(owner, exclude_owners, exclude_owner_regexes):
     return any(regex.search(owner) for regex in exclude_owner_regexes)
 
 
-def count_manual_templates(data_dir):
-    data_dir = Path(data_dir)
+def count_manual_templates(rptsched_dir):
+    rptsched_dir = Path(rptsched_dir)
     count = 0
-    with (data_dir / "schedlist").open() as f:
+    with (rptsched_dir / "schedlist").open() as f:
         for line in f:
             raw_line = line.rstrip("\n")
             if not raw_line.strip():
@@ -62,17 +62,17 @@ def count_manual_templates(data_dir):
     return count
 
 
-def find_stale_template_candidates(data_dir, activity_index, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
-    data_dir = Path(data_dir)
+def find_stale_template_candidates(rptsched_dir, activity_index, years=3, today=None, exclude_owners=(), exclude_owner_regexes=()):
+    rptsched_dir = Path(rptsched_dir)
     if today is None:
         today = datetime.now()
     threshold = years_before(today, years)
     compiled_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in exclude_owner_regexes]
 
-    file_groups = _group_files_by_id(data_dir)
+    file_groups = _group_files_by_id(rptsched_dir)
 
     candidates = {}
-    with (data_dir / "schedlist").open() as f:
+    with (rptsched_dir / "schedlist").open() as f:
         for line in f:
             raw_line = line.rstrip("\n")
             if not raw_line.strip():

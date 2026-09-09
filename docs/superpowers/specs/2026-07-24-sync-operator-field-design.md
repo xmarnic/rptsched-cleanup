@@ -52,14 +52,14 @@ definitions.
 
 Both required as CLI arguments, never hardcoded:
 
-- `--data-dir` — path to the Rptsched directory.
+- `--rptsched-dir` — path to the Rptsched directory.
 - `--quarantine-dir` — path to the quarantine directory.
 
 ## Mismatch detection
 
 For each `schedlist` line (id + owner field):
 
-1. Locate `<id>.set` in `--data-dir`. **If missing:** log a warning and
+1. Locate `<id>.set` in `--rptsched-dir`. **If missing:** log a warning and
    skip this id — a missing `.set` file for an existing `schedlist` line
    is a separate data-integrity anomaly outside this script's job; do not
    abort the run over it.

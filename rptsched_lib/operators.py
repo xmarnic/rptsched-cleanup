@@ -21,10 +21,10 @@ def _extract_operator(set_path):
     return None
 
 
-def read_schedlist_owners(data_dir):
-    data_dir = Path(data_dir)
+def read_schedlist_owners(rptsched_dir):
+    rptsched_dir = Path(rptsched_dir)
     owners = {}
-    with (data_dir / "schedlist").open() as f:
+    with (rptsched_dir / "schedlist").open() as f:
         for line in f:
             raw_line = line.rstrip("\n")
             if not raw_line.strip():
@@ -34,15 +34,15 @@ def read_schedlist_owners(data_dir):
     return owners
 
 
-def find_operator_mismatches(data_dir):
-    data_dir = Path(data_dir)
-    owners = read_schedlist_owners(data_dir)
+def find_operator_mismatches(rptsched_dir):
+    rptsched_dir = Path(rptsched_dir)
+    owners = read_schedlist_owners(rptsched_dir)
 
     mismatches = {}
     skipped = []
     for template_id in sorted(owners):
         owner = owners[template_id]
-        set_path = data_dir / "{}.set".format(template_id)
+        set_path = rptsched_dir / "{}.set".format(template_id)
         if not set_path.is_file():
             skipped.append(SkippedId(template_id, "missing .set file"))
             continue
@@ -58,15 +58,15 @@ def find_operator_mismatches(data_dir):
     return mismatches, skipped
 
 
-def read_operator(data_dir, template_id):
-    set_path = Path(data_dir) / "{}.set".format(template_id)
+def read_operator(rptsched_dir, template_id):
+    set_path = Path(rptsched_dir) / "{}.set".format(template_id)
     if not set_path.is_file():
         return None
     return _extract_operator(set_path)
 
 
-def rewrite_operator(data_dir, template_id, new_value):
-    set_path = Path(data_dir) / "{}.set".format(template_id)
+def rewrite_operator(rptsched_dir, template_id, new_value):
+    set_path = Path(rptsched_dir) / "{}.set".format(template_id)
 
     lines = []
     found = False
@@ -102,12 +102,12 @@ def read_operator_manifest(run_dir):
     return read_manifest(run_dir, fieldnames=MANIFEST_FIELDS)
 
 
-def apply_mismatches(data_dir, run_dir, mismatches):
+def apply_mismatches(rptsched_dir, run_dir, mismatches):
     rows = []
     try:
         for template_id in sorted(mismatches):
             m = mismatches[template_id]
-            rewrite_operator(data_dir, template_id, m.new_operator)
+            rewrite_operator(rptsched_dir, template_id, m.new_operator)
             rows.append({"id": m.id, "old_operator": m.old_operator, "new_operator": m.new_operator})
     except OSError as err:
         write_operator_manifest(run_dir, rows)
@@ -136,7 +136,7 @@ def classify_current_value(current, old_value, new_value):
     return "conflict"
 
 
-def apply_reviewed_changes(data_dir, run_dir, reviewed, classifications):
+def apply_reviewed_changes(rptsched_dir, run_dir, reviewed, classifications):
     """
     Applies old_operator->new_operator for reviewed IDs classified as
     "matches_old" (still needs the write); IDs classified as
@@ -151,7 +151,7 @@ def apply_reviewed_changes(data_dir, run_dir, reviewed, classifications):
         for template_id in sorted(reviewed):
             record = reviewed[template_id]
             if classifications[template_id] == "matches_old":
-                rewrite_operator(data_dir, template_id, record["new_operator"])
+                rewrite_operator(rptsched_dir, template_id, record["new_operator"])
             rows.append({
                 "id": template_id,
                 "old_operator": record["old_operator"],

@@ -68,19 +68,19 @@ usage should go through day to day. Full rationale and design decisions:
 
 **Plumbing** (`detect_<category>.py` / `report_<category>.py` /
 `execute_<category>.py`, e.g. `detect_stale_templates.py`):
-- `detect_<category>.py` — pure detection. Copies `--data-dir` first
+- `detect_<category>.py` — pure detection. Copies `--rptsched-dir` first
   (`schedlist` is a single flat-file index for the entire report
   scheduler — too sensitive to read live from a tool that only needs
   read access), then emits one JSON record per candidate to stdout.
   Writes nothing else, except stale-templates' `--index-cache-path` (an
   explicit, deliberate exception — see below).
 - `report_<category>.py` — reads a JSONL stream (stdin or
-  `--candidates-file`) plus `--data-dir`, prints a human-readable
+  `--candidates-file`) plus `--rptsched-dir`, prints a human-readable
   analysis. Never recomputes detection.
 - `execute_<category>.py` — reads a **reviewed** JSONL file via
   `--candidates-file` (never stdin, since an unreviewed pipe input here
   would defeat the review gate). Before mutating anything, re-runs
-  detection fresh against **live** `--data-dir` (no copy — it's about to
+  detection fresh against **live** `--rptsched-dir` (no copy — it's about to
   mutate that directory anyway) and diffs it against the reviewed file
   **per candidate ID, not whole-stream**: a reviewed ID missing from the
   fresh result, or present with changed identity-defining fields (e.g.
@@ -132,7 +132,7 @@ lets you act on it.)
   `--index-cache-path`. That's disposable derived cache state, not
   `rptsched/` production data or an audit artifact, so it doesn't violate
   the spirit of the guarantee — but it does mean "writes nothing" now
-  means "writes nothing to `--data-dir` or `--quarantine-dir`," not
+  means "writes nothing to `--rptsched-dir` or `--quarantine-dir`," not
   literally zero bytes written anywhere.
 - **Quarantine is always a move, never a delete.** Unchanged.
 - **`--restore` is idempotent and resumable**: moves each manifest row's

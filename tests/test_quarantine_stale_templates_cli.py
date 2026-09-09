@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import quarantine_stale_templates
-from tests.fixtures import make_data_dir
+from tests.fixtures import make_rptsched_dir
 
 STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
 ACTIVE_LINE = "abcd|noverdue|Active Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
@@ -31,14 +31,14 @@ def _make_log_dirs(tmp, active_report_sources_and_descriptions=()):
 class TestBareDetect(unittest.TestCase):
     def test_saves_candidates_and_prints_count(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             work_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
                     "--work-dir", str(work_dir),
@@ -49,21 +49,21 @@ class TestBareDetect(unittest.TestCase):
             candidates_path = work_dir / "candidates.jsonl"
             self.assertTrue(candidates_path.is_file())
             self.assertIn("wxyz", candidates_path.read_text())
-            # bare mode must not touch data-dir at all
-            self.assertTrue((data_dir / "wxyz.set").exists())
+            # bare mode must not touch rptsched-dir at all
+            self.assertTrue((rptsched_dir / "wxyz.set").exists())
 
 
 class TestReportFlag(unittest.TestCase):
     def test_prints_full_report(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             work_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
                     "--work-dir", str(work_dir),
@@ -78,7 +78,7 @@ class TestReportFlag(unittest.TestCase):
 class TestExecuteFlag(unittest.TestCase):
     def test_requires_prior_detect(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp)
             work_dir = Path(tmp) / "work"
@@ -86,7 +86,7 @@ class TestExecuteFlag(unittest.TestCase):
             err = io.StringIO()
             with self.assertRaises(SystemExit), redirect_stderr(err):
                 quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
@@ -99,14 +99,14 @@ class TestExecuteFlag(unittest.TestCase):
 
     def test_quarantines_using_saved_candidates(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             work_dir = Path(tmp) / "work"
 
             with redirect_stdout(io.StringIO()):
                 quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
                     "--work-dir", str(work_dir),
@@ -115,7 +115,7 @@ class TestExecuteFlag(unittest.TestCase):
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir),
+                    "--rptsched-dir", str(rptsched_dir),
                     "--quarantine-dir", str(quarantine_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
@@ -125,27 +125,27 @@ class TestExecuteFlag(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertIn("Moved 2 file(s)", out.getvalue())
-            self.assertFalse((data_dir / "wxyz.set").exists())
-            self.assertTrue((data_dir / "abcd.set").exists())
+            self.assertFalse((rptsched_dir / "wxyz.set").exists())
+            self.assertTrue((rptsched_dir / "abcd.set").exists())
 
 
 class TestRestoreFlag(unittest.TestCase):
     def test_full_cycle_round_trips_cleanly(self):
         with TemporaryDirectory() as tmp:
-            data_dir = make_data_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
+            rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
             work_dir = Path(tmp) / "work"
-            files_before = sorted(p.name for p in data_dir.iterdir())
-            schedlist_before = sorted((data_dir / "schedlist").read_text().splitlines())
+            files_before = sorted(p.name for p in rptsched_dir.iterdir())
+            schedlist_before = sorted((rptsched_dir / "schedlist").read_text().splitlines())
 
             with redirect_stdout(io.StringIO()):
                 quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir), "--logs-report-dir", str(report_dir),
+                    "--rptsched-dir", str(rptsched_dir), "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir), "--work-dir", str(work_dir),
                 ])
                 quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir),
+                    "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
                     "--logs-report-dir", str(report_dir), "--logs-hist-dir", str(hist_dir),
                     "--work-dir", str(work_dir), "--execute",
                 ])
@@ -155,25 +155,25 @@ class TestRestoreFlag(unittest.TestCase):
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
-                    "--data-dir", str(data_dir), "--quarantine-dir", str(quarantine_dir),
+                    "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
                     "--restore", str(run_dir),
                 ])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("Restored", out.getvalue())
-            self.assertEqual(sorted(p.name for p in data_dir.iterdir()), files_before)
-            self.assertEqual(sorted((data_dir / "schedlist").read_text().splitlines()), schedlist_before)
+            self.assertEqual(sorted(p.name for p in rptsched_dir.iterdir()), files_before)
+            self.assertEqual(sorted((rptsched_dir / "schedlist").read_text().splitlines()), schedlist_before)
 
 
 def _make_unicorn_root(tmp, schedlist_lines, extra_files, active_report_sources_and_descriptions=()):
     root = Path(tmp) / "Unicorn"
-    data_dir = root / "Rptsched"
-    data_dir.mkdir(parents=True)
-    with (data_dir / "schedlist").open("w") as f:
+    rptsched_dir = root / "Rptsched"
+    rptsched_dir.mkdir(parents=True)
+    with (rptsched_dir / "schedlist").open("w") as f:
         for line in schedlist_lines:
             f.write(line + "\n")
     for filename in extra_files:
-        (data_dir / filename).write_text("placeholder")
+        (rptsched_dir / filename).write_text("placeholder")
 
     report_dir, hist_dir = _make_log_dirs(tmp, active_report_sources_and_descriptions)
     (root / "Logs" / "Report").mkdir(parents=True)
@@ -182,13 +182,13 @@ def _make_unicorn_root(tmp, schedlist_lines, extra_files, active_report_sources_
         (root / "Logs" / "Report" / f.name).write_text(f.read_text())
     for f in hist_dir.iterdir():
         (root / "Logs" / "Hist" / f.name).write_text(f.read_text())
-    return root, data_dir
+    return root, rptsched_dir
 
 
 class TestUnicornRoot(unittest.TestCase):
     def test_flag_derives_all_three_paths(self):
         with TemporaryDirectory() as tmp:
-            root, data_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
+            root, rptsched_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
             work_dir = Path(tmp) / "work"
 
             out = io.StringIO()
@@ -203,7 +203,7 @@ class TestUnicornRoot(unittest.TestCase):
 
     def test_env_var_derives_all_three_paths(self):
         with TemporaryDirectory() as tmp:
-            root, data_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
+            root, rptsched_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
             work_dir = Path(tmp) / "work"
 
             out = io.StringIO()
@@ -214,17 +214,17 @@ class TestUnicornRoot(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
 
-    def test_explicit_data_dir_overrides_derived_value(self):
+    def test_explicit_rptsched_dir_overrides_derived_value(self):
         with TemporaryDirectory() as tmp:
-            root, unicorn_data_dir = _make_unicorn_root(tmp, [ACTIVE_LINE], ["abcd.set"])
-            override_data_dir = make_data_dir(tmp, [STALE_LINE], ["wxyz.set"])
+            root, unicorn_rptsched_dir = _make_unicorn_root(tmp, [ACTIVE_LINE], ["abcd.set"])
+            override_rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set"])
             work_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
                     "--unicorn-root", str(root),
-                    "--data-dir", str(override_data_dir),
+                    "--rptsched-dir", str(override_rptsched_dir),
                     "--work-dir", str(work_dir),
                 ])
 
@@ -233,7 +233,7 @@ class TestUnicornRoot(unittest.TestCase):
             # unicorn-root-derived one (which only has abcd, active)
             self.assertIn("wxyz", (work_dir / "candidates.jsonl").read_text())
 
-    def test_missing_data_dir_and_unicorn_root_errors(self):
+    def test_missing_rptsched_dir_and_unicorn_root_errors(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("RPTSCHED_UNICORN_ROOT", None)
             with self.assertRaises(SystemExit):

@@ -80,21 +80,21 @@ class TestManifestRoundTrip(unittest.TestCase):
 class TestMoveGroupsSuccess(unittest.TestCase):
     def test_moves_all_files_and_writes_manifest(self):
         with TemporaryDirectory() as tmp:
-            data_dir = Path(tmp) / "data"
-            data_dir.mkdir()
-            (data_dir / "abcd.set").write_text("set content")
-            (data_dir / "abcd.user").write_text("user content")
-            (data_dir / "efgh.set").write_text("other set content")
+            rptsched_dir = Path(tmp) / "data"
+            rptsched_dir.mkdir()
+            (rptsched_dir / "abcd.set").write_text("set content")
+            (rptsched_dir / "abcd.user").write_text("user content")
+            (rptsched_dir / "efgh.set").write_text("other set content")
 
             run_dir = make_run_dir(Path(tmp) / "quarantine", "orphans", "20260724_090000")
             groups = {"abcd": ["abcd.set", "abcd.user"], "efgh": ["efgh.set"]}
 
-            rows = move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
+            rows = move_groups_to_quarantine(rptsched_dir, run_dir, groups, moved_at="20260724_090000")
 
             self.assertEqual(len(rows), 3)
-            self.assertFalse((data_dir / "abcd.set").exists())
-            self.assertFalse((data_dir / "abcd.user").exists())
-            self.assertFalse((data_dir / "efgh.set").exists())
+            self.assertFalse((rptsched_dir / "abcd.set").exists())
+            self.assertFalse((rptsched_dir / "abcd.user").exists())
+            self.assertFalse((rptsched_dir / "efgh.set").exists())
             self.assertTrue((run_dir / "abcd.set").is_file())
             self.assertTrue((run_dir / "abcd.user").is_file())
             self.assertTrue((run_dir / "efgh.set").is_file())
@@ -106,7 +106,7 @@ class TestMoveGroupsSuccess(unittest.TestCase):
             abcd_set_row = next(r for r in rows if r["filename"] == "abcd.set")
             self.assertEqual(abcd_set_row["id"], "abcd")
             self.assertEqual(abcd_set_row["extension"], "set")
-            self.assertEqual(abcd_set_row["source_path"], str(data_dir / "abcd.set"))
+            self.assertEqual(abcd_set_row["source_path"], str(rptsched_dir / "abcd.set"))
             self.assertEqual(abcd_set_row["dest_path"], str(run_dir / "abcd.set"))
             self.assertEqual(abcd_set_row["moved_at"], "20260724_090000")
 
@@ -114,10 +114,10 @@ class TestMoveGroupsSuccess(unittest.TestCase):
 class TestMoveGroupsAbortOnFailure(unittest.TestCase):
     def test_aborts_and_writes_partial_manifest_on_move_failure(self):
         with TemporaryDirectory() as tmp:
-            data_dir = Path(tmp) / "data"
-            data_dir.mkdir()
-            (data_dir / "abcd.set").write_text("set content")
-            (data_dir / "efgh.set").write_text("other set content")
+            rptsched_dir = Path(tmp) / "data"
+            rptsched_dir.mkdir()
+            (rptsched_dir / "abcd.set").write_text("set content")
+            (rptsched_dir / "efgh.set").write_text("other set content")
 
             run_dir = make_run_dir(Path(tmp) / "quarantine", "orphans", "20260724_090000")
             groups = {"abcd": ["abcd.set"], "efgh": ["efgh.set"]}
@@ -131,12 +131,12 @@ class TestMoveGroupsAbortOnFailure(unittest.TestCase):
 
             with patch("rptsched_lib.quarantine.shutil.move", side_effect=fail_on_efgh):
                 with self.assertRaises(QuarantineMoveError):
-                    move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
+                    move_groups_to_quarantine(rptsched_dir, run_dir, groups, moved_at="20260724_090000")
 
             # abcd moved (sorts before efgh), efgh did not
-            self.assertFalse((data_dir / "abcd.set").exists())
+            self.assertFalse((rptsched_dir / "abcd.set").exists())
             self.assertTrue((run_dir / "abcd.set").is_file())
-            self.assertTrue((data_dir / "efgh.set").exists())
+            self.assertTrue((rptsched_dir / "efgh.set").exists())
             self.assertFalse((run_dir / "efgh.set").exists())
 
             # manifest reflects only the successful move
@@ -147,25 +147,25 @@ class TestMoveGroupsAbortOnFailure(unittest.TestCase):
 
 class TestRestoreRun(unittest.TestCase):
     def _setup_run(self, tmp):
-        data_dir = Path(tmp) / "data"
-        data_dir.mkdir()
-        (data_dir / "abcd.set").write_text("set content")
-        (data_dir / "efgh.set").write_text("other set content")
+        rptsched_dir = Path(tmp) / "data"
+        rptsched_dir.mkdir()
+        (rptsched_dir / "abcd.set").write_text("set content")
+        (rptsched_dir / "efgh.set").write_text("other set content")
 
         run_dir = make_run_dir(Path(tmp) / "quarantine", "orphans", "20260724_090000")
         groups = {"abcd": ["abcd.set"], "efgh": ["efgh.set"]}
-        move_groups_to_quarantine(data_dir, run_dir, groups, moved_at="20260724_090000")
-        return data_dir, run_dir
+        move_groups_to_quarantine(rptsched_dir, run_dir, groups, moved_at="20260724_090000")
+        return rptsched_dir, run_dir
 
     def test_restores_all_files(self):
         with TemporaryDirectory() as tmp:
-            data_dir, run_dir = self._setup_run(tmp)
+            rptsched_dir, run_dir = self._setup_run(tmp)
 
             result = restore_run(run_dir)
 
             self.assertEqual(result, {"restored": 2, "skipped": 0})
-            self.assertTrue((data_dir / "abcd.set").is_file())
-            self.assertTrue((data_dir / "efgh.set").is_file())
+            self.assertTrue((rptsched_dir / "abcd.set").is_file())
+            self.assertTrue((rptsched_dir / "efgh.set").is_file())
             self.assertFalse((run_dir / "abcd.set").exists())
             self.assertFalse((run_dir / "efgh.set").exists())
             # manifest is never deleted
@@ -173,7 +173,7 @@ class TestRestoreRun(unittest.TestCase):
 
     def test_second_restore_is_idempotent_no_op(self):
         with TemporaryDirectory() as tmp:
-            data_dir, run_dir = self._setup_run(tmp)
+            rptsched_dir, run_dir = self._setup_run(tmp)
             restore_run(run_dir)
 
             result = restore_run(run_dir)
@@ -182,9 +182,9 @@ class TestRestoreRun(unittest.TestCase):
 
     def test_refuses_to_overwrite_existing_source(self):
         with TemporaryDirectory() as tmp:
-            data_dir, run_dir = self._setup_run(tmp)
+            rptsched_dir, run_dir = self._setup_run(tmp)
             # something now occupies abcd.set's original path
-            (data_dir / "abcd.set").write_text("someone else's file")
+            (rptsched_dir / "abcd.set").write_text("someone else's file")
 
             with self.assertRaises(QuarantineRestoreError):
                 restore_run(run_dir)

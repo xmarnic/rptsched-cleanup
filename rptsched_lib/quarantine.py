@@ -50,15 +50,15 @@ def read_manifest(run_dir: Path, fieldnames=MANIFEST_FIELDS):
         return [dict(row) for row in reader]
 
 
-def move_groups_to_quarantine(data_dir: Path, run_dir: Path, groups, moved_at: str):
-    data_dir = Path(data_dir)
+def move_groups_to_quarantine(rptsched_dir: Path, run_dir: Path, groups, moved_at: str):
+    rptsched_dir = Path(rptsched_dir)
     run_dir = Path(run_dir)
     rows = []
 
     try:
         for file_id in sorted(groups):
             for filename in sorted(groups[file_id]):
-                source_path = data_dir / filename
+                source_path = rptsched_dir / filename
                 dest_path = run_dir / filename
                 shutil.move(str(source_path), str(dest_path))
 

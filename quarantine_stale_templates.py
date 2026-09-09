@@ -22,7 +22,7 @@ touches anything, same as always -- this is a separate, deliberate gate
 on top of that: you have to have actually looked at a report before
 this wrapper will let you act on it.)
 
---data-dir/--logs-report-dir/--logs-hist-dir can be derived from a
+--rptsched-dir/--logs-report-dir/--logs-hist-dir can be derived from a
 single --unicorn-root (or RPTSCHED_UNICORN_ROOT env var) instead of
 passed individually -- Rptsched/, Logs/Report/, and Logs/Hist/ share one
 common Unicorn install root by Symphony's own convention (confirmed in
@@ -41,7 +41,7 @@ Usage:
     quarantine_stale_templates.py --quarantine-dir Q --restore RUN_DIR
 
     # or fully explicit, e.g. for local testing:
-    quarantine_stale_templates.py --data-dir D --logs-report-dir R --logs-hist-dir H --report
+    quarantine_stale_templates.py --rptsched-dir D --logs-report-dir R --logs-hist-dir H --report
 """
 import argparse
 import io
@@ -63,10 +63,10 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--unicorn-root", type=Path, default=unicorn_root_default(),
-        help="Symphony Unicorn install root (or set RPTSCHED_UNICORN_ROOT). Derives --data-dir, "
+        help="Symphony Unicorn install root (or set RPTSCHED_UNICORN_ROOT). Derives --rptsched-dir, "
              "--logs-report-dir, and --logs-hist-dir when those aren't passed individually.",
     )
-    parser.add_argument("--data-dir", type=Path, default=None)
+    parser.add_argument("--rptsched-dir", type=Path, default=None)
     parser.add_argument("--quarantine-dir", type=Path, help="Required with --execute/--restore.")
     parser.add_argument("--logs-report-dir", type=Path, default=None)
     parser.add_argument("--logs-hist-dir", type=Path, default=None)
@@ -97,7 +97,7 @@ def _exclude_argv(args):
 
 def _run_detect(args, cache_path, candidates_path):
     detect_argv = [
-        "--data-dir", str(args.data_dir),
+        "--rptsched-dir", str(args.rptsched_dir),
         "--logs-report-dir", str(args.logs_report_dir),
         "--logs-hist-dir", str(args.logs_hist_dir),
         "--index-cache-path", str(cache_path),
@@ -116,7 +116,7 @@ def _run_detect(args, cache_path, candidates_path):
 
 def _run_report(args, candidates_path):
     report_argv = [
-        "--data-dir", str(args.data_dir),
+        "--rptsched-dir", str(args.rptsched_dir),
         "--candidates-file", str(candidates_path),
     ] + _exclude_argv(args)
     return report_stale_templates.main(report_argv)
@@ -124,7 +124,7 @@ def _run_report(args, candidates_path):
 
 def _run_execute(args, cache_path, candidates_path):
     execute_argv = [
-        "--data-dir", str(args.data_dir),
+        "--rptsched-dir", str(args.rptsched_dir),
         "--quarantine-dir", str(args.quarantine_dir),
         "--candidates-file", str(candidates_path),
         "--logs-report-dir", str(args.logs_report_dir),
@@ -137,7 +137,7 @@ def _run_execute(args, cache_path, candidates_path):
 
 def _run_restore(args):
     return execute_stale_templates.main([
-        "--data-dir", str(args.data_dir),
+        "--rptsched-dir", str(args.rptsched_dir),
         "--quarantine-dir", str(args.quarantine_dir),
         "--restore", str(args.restore),
     ])
@@ -148,16 +148,16 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.unicorn_root is not None:
-        derived_data_dir, derived_logs_report_dir, derived_logs_hist_dir = unicorn_paths(args.unicorn_root)
-        if args.data_dir is None:
-            args.data_dir = derived_data_dir
+        derived_rptsched_dir, derived_logs_report_dir, derived_logs_hist_dir = unicorn_paths(args.unicorn_root)
+        if args.rptsched_dir is None:
+            args.rptsched_dir = derived_rptsched_dir
         if args.logs_report_dir is None:
             args.logs_report_dir = derived_logs_report_dir
         if args.logs_hist_dir is None:
             args.logs_hist_dir = derived_logs_hist_dir
 
-    if args.data_dir is None:
-        parser.error("--data-dir is required (or set --unicorn-root / RPTSCHED_UNICORN_ROOT)")
+    if args.rptsched_dir is None:
+        parser.error("--rptsched-dir is required (or set --unicorn-root / RPTSCHED_UNICORN_ROOT)")
 
     if args.restore:
         if args.quarantine_dir is None:
