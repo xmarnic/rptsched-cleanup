@@ -1,3 +1,4 @@
+import gzip
 import subprocess
 import unittest
 from datetime import datetime
@@ -6,6 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from rptsched_lib.hist_log import (
+    _read_lines,
     decode,
     filter_raw_lines,
     find_hist_files,
@@ -66,6 +68,23 @@ class TestFindHistFiles(unittest.TestCase):
             files = find_hist_files(logs_dir, since=datetime(2026, 1, 1))
 
             self.assertEqual({f.name for f in files}, {"202608.hist"})
+
+
+class TestReadLines(unittest.TestCase):
+    def test_z_file_with_invalid_utf8_byte_does_not_raise(self):
+        # Real production .hist.Z files contain non-UTF-8 bytes (confirmed
+        # against the first live production run: UnicodeDecodeError on byte
+        # 0xc3 via zcat's default strict-utf8 decoding). Plain-text .hist
+        # already used errors="replace"; the .Z branch needs the same.
+        with TemporaryDirectory() as tmp:
+            hist_path = Path(tmp) / "202608.hist.Z"
+            with gzip.open(hist_path, "wb") as f:
+                f.write(b"^S1ge\xc3invalid\n^S2gk valid\n")
+
+            lines = _read_lines(hist_path)
+
+            self.assertEqual(len(lines), 2)
+            self.assertIn("^S2gk valid", lines)
 
 
 class TestParseDecodedRecords(unittest.TestCase):

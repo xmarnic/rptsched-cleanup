@@ -19,7 +19,8 @@ def _read_lines(hist_path: Path):
             ["zcat", str(hist_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         return proc.stdout.splitlines()
