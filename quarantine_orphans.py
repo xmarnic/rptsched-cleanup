@@ -4,14 +4,14 @@ Coherent single-command wrapper around detect_orphans.py,
 report_orphans.py, and execute_orphans.py -- calls each one's real
 main(argv) exactly as you'd invoke it by hand, so this can never drift
 from what those tools do standalone. Manages its own default location
-for the candidates file under --work-dir.
+for the candidates file under --data-dir.
 
-  (bare)            detect only -- saves candidates into --work-dir, prints a count
+  (bare)            detect only -- saves candidates into --data-dir, prints a count
   --report          also prints the full human-readable report
-  --execute         quarantines using --work-dir's saved candidates file
+  --execute         quarantines using --data-dir's saved candidates file
   --restore RUN_DIR restores a prior run
 
---execute requires a candidates file already sitting in --work-dir --
+--execute requires a candidates file already sitting in --data-dir --
 it does not silently re-detect first, since that would skip the review
 step. Run without --execute first, look at what it found, then
 --execute once you're satisfied.
@@ -42,9 +42,9 @@ from pathlib import Path
 import detect_orphans
 import execute_orphans
 import report_orphans
-from rptsched_lib.cli import default_work_dir, run, unicorn_paths, unicorn_root_default
+from rptsched_lib.cli import default_data_dir, run, unicorn_paths, unicorn_root_default
 
-DEFAULT_WORK_DIR = default_work_dir("orphans")
+DEFAULT_DATA_DIR = default_data_dir("orphans")
 CANDIDATES_FILENAME = "candidates.jsonl"
 
 
@@ -58,9 +58,9 @@ def build_parser():
     parser.add_argument("--rptsched-dir", type=Path, default=None)
     parser.add_argument("--quarantine-dir", type=Path, help="Required with --execute/--restore.")
     parser.add_argument(
-        "--work-dir", type=Path, default=DEFAULT_WORK_DIR,
+        "--data-dir", type=Path, default=DEFAULT_DATA_DIR,
         help="Holds candidates.jsonl. Persistent by default ({}), so --execute has something "
-             "to act on.".format(DEFAULT_WORK_DIR),
+             "to act on.".format(DEFAULT_DATA_DIR),
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--report", action="store_true")
@@ -113,8 +113,8 @@ def main(argv=None) -> int:
             parser.error("--quarantine-dir is required with --restore")
         return _run_restore(args)
 
-    args.work_dir.mkdir(parents=True, exist_ok=True)
-    candidates_path = args.work_dir / CANDIDATES_FILENAME
+    args.data_dir.mkdir(parents=True, exist_ok=True)
+    candidates_path = args.data_dir / CANDIDATES_FILENAME
 
     if args.execute:
         if args.quarantine_dir is None:

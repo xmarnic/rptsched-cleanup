@@ -33,7 +33,7 @@ class TestBareDetect(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
@@ -41,12 +41,12 @@ class TestBareDetect(unittest.TestCase):
                     "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                 ])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
-            candidates_path = work_dir / "candidates.jsonl"
+            candidates_path = data_dir / "candidates.jsonl"
             self.assertTrue(candidates_path.is_file())
             self.assertIn("wxyz", candidates_path.read_text())
             # bare mode must not touch rptsched-dir at all
@@ -58,7 +58,7 @@ class TestReportFlag(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
@@ -66,7 +66,7 @@ class TestReportFlag(unittest.TestCase):
                     "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                     "--report",
                 ])
 
@@ -81,7 +81,7 @@ class TestExecuteFlag(unittest.TestCase):
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set", "wxyz.selans"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp)
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             err = io.StringIO()
             with self.assertRaises(SystemExit), redirect_stderr(err):
@@ -90,7 +90,7 @@ class TestExecuteFlag(unittest.TestCase):
                     "--quarantine-dir", str(quarantine_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                     "--execute",
                 ])
 
@@ -102,14 +102,14 @@ class TestExecuteFlag(unittest.TestCase):
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             with redirect_stdout(io.StringIO()):
                 quarantine_stale_templates.main([
                     "--rptsched-dir", str(rptsched_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                 ])
 
             out = io.StringIO()
@@ -119,7 +119,7 @@ class TestExecuteFlag(unittest.TestCase):
                     "--quarantine-dir", str(quarantine_dir),
                     "--logs-report-dir", str(report_dir),
                     "--logs-hist-dir", str(hist_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                     "--execute",
                 ])
 
@@ -135,19 +135,19 @@ class TestRestoreFlag(unittest.TestCase):
             rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE, ACTIVE_LINE], ["wxyz.set", "wxyz.selans", "abcd.set"])
             quarantine_dir = Path(tmp) / "quarantine"
             report_dir, hist_dir = _make_log_dirs(tmp, [("noverdue", "Active Template")])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
             files_before = sorted(p.name for p in rptsched_dir.iterdir())
             schedlist_before = sorted((rptsched_dir / "schedlist").read_text().splitlines())
 
             with redirect_stdout(io.StringIO()):
                 quarantine_stale_templates.main([
                     "--rptsched-dir", str(rptsched_dir), "--logs-report-dir", str(report_dir),
-                    "--logs-hist-dir", str(hist_dir), "--work-dir", str(work_dir),
+                    "--logs-hist-dir", str(hist_dir), "--data-dir", str(data_dir),
                 ])
                 quarantine_stale_templates.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
                     "--logs-report-dir", str(report_dir), "--logs-hist-dir", str(hist_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             run_dir = list(quarantine_dir.glob("templates_*"))[0]
@@ -189,13 +189,13 @@ class TestUnicornRoot(unittest.TestCase):
     def test_flag_derives_all_three_paths(self):
         with TemporaryDirectory() as tmp:
             root, rptsched_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
                     "--unicorn-root", str(root),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                 ])
 
             self.assertEqual(exit_code, 0)
@@ -204,12 +204,12 @@ class TestUnicornRoot(unittest.TestCase):
     def test_env_var_derives_all_three_paths(self):
         with TemporaryDirectory() as tmp:
             root, rptsched_dir = _make_unicorn_root(tmp, [STALE_LINE], ["wxyz.set"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with patch.dict(os.environ, {"RPTSCHED_UNICORN_ROOT": str(root)}):
                 with redirect_stdout(out):
-                    exit_code = quarantine_stale_templates.main(["--work-dir", str(work_dir)])
+                    exit_code = quarantine_stale_templates.main(["--data-dir", str(data_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
@@ -218,20 +218,20 @@ class TestUnicornRoot(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root, unicorn_rptsched_dir = _make_unicorn_root(tmp, [ACTIVE_LINE], ["abcd.set"])
             override_rptsched_dir = make_rptsched_dir(tmp, [STALE_LINE], ["wxyz.set"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_stale_templates.main([
                     "--unicorn-root", str(root),
                     "--rptsched-dir", str(override_rptsched_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                 ])
 
             self.assertEqual(exit_code, 0)
             # candidate came from the override dir (wxyz), not the
             # unicorn-root-derived one (which only has abcd, active)
-            self.assertIn("wxyz", (work_dir / "candidates.jsonl").read_text())
+            self.assertIn("wxyz", (data_dir / "candidates.jsonl").read_text())
 
     def test_missing_rptsched_dir_and_unicorn_root_errors(self):
         with patch.dict(os.environ, {}, clear=False):

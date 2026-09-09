@@ -16,18 +16,18 @@ class TestBareDetect(unittest.TestCase):
     def test_saves_candidates_and_prints_count(self):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set", "wxyz.user"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_orphans.main([
                     "--rptsched-dir", str(rptsched_dir),
-                    "--work-dir", str(work_dir),
+                    "--data-dir", str(data_dir),
                 ])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
-            self.assertIn("wxyz", (work_dir / "candidates.jsonl").read_text())
+            self.assertIn("wxyz", (data_dir / "candidates.jsonl").read_text())
             self.assertTrue((rptsched_dir / "wxyz.set").exists())
 
 
@@ -35,12 +35,12 @@ class TestReportFlag(unittest.TestCase):
     def test_prints_full_report(self):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set", "wxyz.user"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_orphans.main([
-                    "--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir), "--report",
+                    "--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir), "--report",
                 ])
 
             self.assertEqual(exit_code, 0)
@@ -52,13 +52,13 @@ class TestExecuteFlag(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set"])
             quarantine_dir = Path(tmp) / "quarantine"
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             err = io.StringIO()
             with self.assertRaises(SystemExit), redirect_stderr(err):
                 quarantine_orphans.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             self.assertIn("No candidates file found", err.getvalue())
@@ -68,16 +68,16 @@ class TestExecuteFlag(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set", "wxyz.user"])
             quarantine_dir = Path(tmp) / "quarantine"
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             with redirect_stdout(io.StringIO()):
-                quarantine_orphans.main(["--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir)])
+                quarantine_orphans.main(["--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir)])
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = quarantine_orphans.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             self.assertEqual(exit_code, 0)
@@ -91,14 +91,14 @@ class TestRestoreFlag(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set", "wxyz.user"])
             quarantine_dir = Path(tmp) / "quarantine"
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
             files_before = sorted(p.name for p in rptsched_dir.iterdir())
 
             with redirect_stdout(io.StringIO()):
-                quarantine_orphans.main(["--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir)])
+                quarantine_orphans.main(["--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir)])
                 quarantine_orphans.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             run_dir = list(quarantine_dir.glob("orphans_*"))[0]
@@ -131,11 +131,11 @@ class TestUnicornRoot(unittest.TestCase):
     def test_flag_derives_rptsched_dir(self):
         with TemporaryDirectory() as tmp:
             root = _make_unicorn_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
-                exit_code = quarantine_orphans.main(["--unicorn-root", str(root), "--work-dir", str(work_dir)])
+                exit_code = quarantine_orphans.main(["--unicorn-root", str(root), "--data-dir", str(data_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
@@ -143,12 +143,12 @@ class TestUnicornRoot(unittest.TestCase):
     def test_env_var_derives_rptsched_dir(self):
         with TemporaryDirectory() as tmp:
             root = _make_unicorn_rptsched_dir(tmp, [KNOWN_LINE], ["abcd.set", "wxyz.set"])
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with patch.dict(os.environ, {"RPTSCHED_UNICORN_ROOT": str(root)}):
                 with redirect_stdout(out):
-                    exit_code = quarantine_orphans.main(["--work-dir", str(work_dir)])
+                    exit_code = quarantine_orphans.main(["--data-dir", str(data_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())

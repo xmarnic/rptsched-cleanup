@@ -3,25 +3,25 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from rptsched_lib.cli import default_work_dir, unicorn_paths, unicorn_root_default
+from rptsched_lib.cli import default_data_dir, unicorn_paths, unicorn_root_default
 
 
 class TestDefaultWorkDir(unittest.TestCase):
     def test_is_anchored_under_home_not_cwd(self):
-        work_dir = default_work_dir("stale_templates")
+        work_dir = default_data_dir("stale_templates")
 
         self.assertTrue(work_dir.is_absolute())
         self.assertTrue(str(work_dir).startswith(str(Path.home())))
 
     def test_distinct_per_category(self):
-        self.assertNotEqual(default_work_dir("orphans"), default_work_dir("operators"))
+        self.assertNotEqual(default_data_dir("orphans"), default_data_dir("operators"))
 
     def test_same_category_is_stable_across_calls(self):
         # Simulates the exact failure mode this exists to prevent: two
         # separate invocations (e.g. detect now, execute days later,
         # possibly after re-extracting the tool into a new directory)
         # must resolve to the same work-dir regardless of cwd.
-        self.assertEqual(default_work_dir("stale_templates"), default_work_dir("stale_templates"))
+        self.assertEqual(default_data_dir("stale_templates"), default_data_dir("stale_templates"))
 
 
 class TestUnicornPaths(unittest.TestCase):

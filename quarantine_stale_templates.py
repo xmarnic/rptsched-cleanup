@@ -5,15 +5,15 @@ report_stale_templates.py, and execute_stale_templates.py -- calls each
 one's real main(argv) exactly as you'd invoke it by hand, so this can
 never drift from what those tools do standalone. Manages its own
 default location for the candidates file and activity-index cache
-under --work-dir, so day-to-day use doesn't require juggling those
+under --data-dir, so day-to-day use doesn't require juggling those
 paths yourself.
 
-  (bare)            detect only -- saves candidates into --work-dir, prints a count
+  (bare)            detect only -- saves candidates into --data-dir, prints a count
   --report          also prints the full human-readable report
-  --execute         quarantines using --work-dir's saved candidates file
+  --execute         quarantines using --data-dir's saved candidates file
   --restore RUN_DIR restores a prior run
 
---execute requires a candidates file already sitting in --work-dir --
+--execute requires a candidates file already sitting in --data-dir --
 it does not silently re-detect first, since that would skip the review
 step. Run without --execute (optionally with --report) first, look at
 what it found, then --execute once you're satisfied. (execute_stale_
@@ -52,9 +52,9 @@ from pathlib import Path
 import detect_stale_templates
 import execute_stale_templates
 import report_stale_templates
-from rptsched_lib.cli import default_work_dir, run, unicorn_paths, unicorn_root_default
+from rptsched_lib.cli import default_data_dir, run, unicorn_paths, unicorn_root_default
 
-DEFAULT_WORK_DIR = default_work_dir("stale_templates")
+DEFAULT_DATA_DIR = default_data_dir("stale_templates")
 CANDIDATES_FILENAME = "candidates.jsonl"
 CACHE_FILENAME = "activity_index_cache.json"
 
@@ -74,10 +74,10 @@ def build_parser():
     parser.add_argument("--exclude-owner", action="append", default=[], metavar="OWNER")
     parser.add_argument("--exclude-owner-regex", action="append", default=[], metavar="PATTERN")
     parser.add_argument(
-        "--work-dir", type=Path, default=DEFAULT_WORK_DIR,
+        "--data-dir", type=Path, default=DEFAULT_DATA_DIR,
         help="Holds candidates.jsonl and the activity-index cache. Persistent by default ({}), "
              "so --execute has something to act on and repeated detect/report runs stay "
-             "cheap.".format(DEFAULT_WORK_DIR),
+             "cheap.".format(DEFAULT_DATA_DIR),
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--report", action="store_true")
@@ -170,9 +170,9 @@ def main(argv=None) -> int:
             "(or set --unicorn-root / RPTSCHED_UNICORN_ROOT)"
         )
 
-    args.work_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = args.work_dir / CACHE_FILENAME
-    candidates_path = args.work_dir / CANDIDATES_FILENAME
+    args.data_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = args.data_dir / CACHE_FILENAME
+    candidates_path = args.data_dir / CANDIDATES_FILENAME
 
     if args.execute:
         if args.quarantine_dir is None:

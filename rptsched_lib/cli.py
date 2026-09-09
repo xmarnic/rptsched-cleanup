@@ -31,18 +31,25 @@ def unicorn_paths(unicorn_root):
     return root / "Rptsched", root / "Logs" / "Report", root / "Logs" / "Hist"
 
 
-def default_work_dir(category):
+def default_data_dir(category):
     """
-    Home-anchored, not cwd-relative -- a wrapper's --work-dir holds
-    state (the candidates file, plus the activity-index cache for
-    stale-templates) meant to persist between a detect/--report run and
-    a later --execute, potentially days apart. A cwd-relative default
-    would silently point at a different, empty directory every time the
-    tool is re-extracted into a fresh location or just invoked from a
-    different directory -- quietly losing the review state and the
-    cache (forcing a full Logs/Hist/ re-decode) with no error at all.
+    XDG-state-anchored, not cwd-relative -- a wrapper's --data-dir holds
+    this tool's own state (the candidates file, plus the activity-index
+    cache for stale-templates) meant to persist between a detect/--report
+    run and a later --execute, potentially days apart. A cwd-relative
+    default would silently point at a different, empty directory every
+    time the tool is re-extracted into a fresh location or just invoked
+    from a different directory -- quietly losing the review state and
+    the cache (forcing a full Logs/Hist/ re-decode) with no error at all.
+
+    $XDG_STATE_HOME is the standard Linux answer for exactly this kind
+    of data ("state data that should persist between application runs,
+    but that is not important or portable enough to store in
+    $XDG_DATA_HOME") -- falls back to ~/.local/state per the spec's own
+    default when unset.
     """
-    return Path.home() / ".rptsched-cleanup" / "{}_work".format(category)
+    xdg_state_home = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(xdg_state_home) / "rptsched-cleanup" / category
 
 
 def run(main_func, argv=None):

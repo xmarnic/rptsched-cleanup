@@ -31,15 +31,15 @@ class TestBareDetect(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")], [])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
-                exit_code = sync_operators.main(["--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir)])
+                exit_code = sync_operators.main(["--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
-            self.assertIn("abcd", (work_dir / "candidates.jsonl").read_text())
+            self.assertIn("abcd", (data_dir / "candidates.jsonl").read_text())
             self.assertEqual(read_operator(rptsched_dir, "abcd"), "OLDMGR")
 
 
@@ -48,12 +48,12 @@ class TestReportFlag(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             rptsched_dir = make_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")], [])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = sync_operators.main([
-                    "--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir), "--report",
+                    "--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir), "--report",
                 ])
 
             self.assertEqual(exit_code, 0)
@@ -67,13 +67,13 @@ class TestExecuteFlag(unittest.TestCase):
             rptsched_dir = make_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")], [])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
             quarantine_dir = Path(tmp) / "quarantine"
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             err = io.StringIO()
             with self.assertRaises(SystemExit), redirect_stderr(err):
                 sync_operators.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             self.assertIn("No candidates file found", err.getvalue())
@@ -84,16 +84,16 @@ class TestExecuteFlag(unittest.TestCase):
             rptsched_dir = make_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")], [])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
             quarantine_dir = Path(tmp) / "quarantine"
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             with redirect_stdout(io.StringIO()):
-                sync_operators.main(["--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir)])
+                sync_operators.main(["--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir)])
 
             out = io.StringIO()
             with redirect_stdout(out):
                 exit_code = sync_operators.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             self.assertEqual(exit_code, 0)
@@ -107,13 +107,13 @@ class TestRestoreFlag(unittest.TestCase):
             rptsched_dir = make_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")], [])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
             quarantine_dir = Path(tmp) / "quarantine"
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             with redirect_stdout(io.StringIO()):
-                sync_operators.main(["--rptsched-dir", str(rptsched_dir), "--work-dir", str(work_dir)])
+                sync_operators.main(["--rptsched-dir", str(rptsched_dir), "--data-dir", str(data_dir)])
                 sync_operators.main([
                     "--rptsched-dir", str(rptsched_dir), "--quarantine-dir", str(quarantine_dir),
-                    "--work-dir", str(work_dir), "--execute",
+                    "--data-dir", str(data_dir), "--execute",
                 ])
 
             run_dir = list(quarantine_dir.glob("operators_*"))[0]
@@ -145,11 +145,11 @@ class TestUnicornRoot(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root, rptsched_dir = _make_unicorn_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with redirect_stdout(out):
-                exit_code = sync_operators.main(["--unicorn-root", str(root), "--work-dir", str(work_dir)])
+                exit_code = sync_operators.main(["--unicorn-root", str(root), "--data-dir", str(data_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
@@ -158,12 +158,12 @@ class TestUnicornRoot(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root, rptsched_dir = _make_unicorn_rptsched_dir(tmp, [_schedlist_line("abcd", "NEWMGR")])
             _write_set_file(rptsched_dir, "abcd", "OLDMGR")
-            work_dir = Path(tmp) / "work"
+            data_dir = Path(tmp) / "work"
 
             out = io.StringIO()
             with patch.dict(os.environ, {"RPTSCHED_UNICORN_ROOT": str(root)}):
                 with redirect_stdout(out):
-                    exit_code = sync_operators.main(["--work-dir", str(work_dir)])
+                    exit_code = sync_operators.main(["--data-dir", str(data_dir)])
 
             self.assertEqual(exit_code, 0)
             self.assertIn("1 candidate(s) detected", out.getvalue())
