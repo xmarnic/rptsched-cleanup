@@ -144,8 +144,8 @@ def main(argv=None) -> int:
             # last_run is deliberately not shown -- it's not part of the
             # decision anymore and displaying it invites the exact
             # misreading that caused the original production incident.
-            print("  {}: {} | report_type={} | owner={} | freq={} | created={} | files={}".format(
-                c.id, c.description, c.report_type, c.owner, c.frequency_flag, c.created,
+            print("  {}: {} | report_source={} | owner={} | freq={} | created={} | files={}".format(
+                c.id, c.description, c.report_source, c.owner, c.frequency_flag, c.created,
                 ", ".join(c.filenames)))
         return 0
 

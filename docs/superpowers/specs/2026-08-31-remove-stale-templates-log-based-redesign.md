@@ -32,7 +32,7 @@ isn't just occasionally wrong, it's structurally blind to the most common
 usage pattern for a manual (`frequency_flag == "n"`) template:
 
 - Ad hoc "Run Now" (Setup and Schedule menu, or double-click) **never**
-  updates a manual template's own `last_run`, on any report type tested,
+  updates a manual template's own `last_run`, on any report source tested,
   on both the test server and directly on production.
 - Scheduling anything on a manual template — ASAP, one-time ("run once"
   → `frequency_flag = "o"`), daily, weekly — **also never touches the
@@ -65,16 +65,16 @@ neither is ever written to, moved, or modified.
 Every report execution — ad hoc or scheduled, no exceptions found in
 testing — produces:
 ```
-YYYYMMDDHHMMSS Starting report <report_type>:"<description>"
-YYYYMMDDHHMMSS Adding report <report_type>:<description> to finished list
-YYYYMMDDHHMMSS Finished report <report_type>:"<description>"
+YYYYMMDDHHMMSS Starting report <report_source>:"<description>"
+YYYYMMDDHHMMSS Adding report <report_source>:<description> to finished list
+YYYYMMDDHHMMSS Finished report <report_source>:"<description>"
 ```
 Plain text, no decode step, ever. This is a **completion** signal — it
 proves a report finished, not just that someone requested one. Cheap
 enough to parse in full on every run; probably doesn't need incremental
 caching.
 
-No owner field. Join key is `(report_type, description)` only.
+No owner field. Join key is `(report_source, description)` only.
 
 ### `Logs/Hist/` — owner-attributed, catches ad hoc, longer retention
 
@@ -92,7 +92,7 @@ scheduling:
 
 | code | command | signal value |
 |---|---|---|
-| `ge` | Create Scheduled Report | commit/save event — carries frequency (including **`"a"` = ad hoc**, never persisted to `schedlist` but logged here), owner, id, report_type, description. The only source that sees ad hoc "Run Now" at all. |
+| `ge` | Create Scheduled Report | commit/save event — carries frequency (including **`"a"` = ad hoc**, never persisted to `schedlist` but logged here), owner, id, report_source, description. The only source that sees ad hoc "Run Now" at all. |
 | `gg` | Modify Scheduled Report | edits to an existing schedule, including `suspend status`. |
 | `gh` | Remove Scheduled Report | schedule deletion. |
 | `gk` | Remove Finished Report | fires when a user dismisses a completed report from Finished Reports; carries `login of the owner of the report` — the authoritative owner field, distinct from the acting user. Conditional (auto-delivered reports may never trigger it) — a corroborator, not a replacement for `Logs/Report/`'s unconditional signal. |
@@ -114,7 +114,7 @@ via one day's file — `^S<seq><code>` is a fixed Symphony-internal
 transaction-log structure, not something that drifts month to month.
 
 Decoded field mapping (via `logprint | translate`): `^oa`=schedule id,
-`^ob`=report_type, `^oc`=description, `^od`=frequency, `^of`=last-run,
+`^ob`=report_source, `^oc`=description, `^od`=frequency, `^of`=last-run,
 `^FW`=acting user, `^FD`=station type.
 
 Set Report Options (`go`, dialog-navigation noise) and Search Order Part
@@ -125,10 +125,10 @@ decoded text avoids picking up either.
 ## The join-key problem is mostly solved without tagging
 
 The earlier version of this document treated id-tagging as the fix for
-`Logs/Report/`'s ambiguous `(report_type, description)` collisions (15%
+`Logs/Report/`'s ambiguous `(report_source, description)` collisions (15%
 of manual templates, concentrated in un-customized descriptions like
 bare `"TS2bibload"`). With `Logs/Hist/`'s owner attribution available,
-`(report_type, description, owner)` resolves the same-day-generated
+`(report_source, description, owner)` resolves the same-day-generated
 ambiguity for any template with activity recorded in `Logs/Hist/` —
 which, per the `"a"` ad hoc discovery, is now most usage. Group-level
 protection remains the fallback for the residual case (activity found
@@ -153,16 +153,16 @@ are unchanged.
    incrementally, not rebuilt from scratch every time — see
    Implementation notes):
    - Parse `Logs/Report/*.log` and `*.log.Z` for `Finished report` lines
-     → `(report_type, description) → most recent timestamp`.
+     → `(report_source, description) → most recent timestamp`.
    - Parse `Logs/Hist/*.hist` and `*.hist.Z`, pre-filtered by raw command
-     code, decoded only for the matched subset → `(report_type,
+     code, decoded only for the matched subset → `(report_source,
      description, owner) → most recent timestamp` for `ge`/`gk` events
      specifically (the ones that represent real usage, not just
      schedule bookkeeping).
    - Only the last `--years` (default 3) of both sources needs scanning
      — not full retention. This is what keeps the `Logs/Hist/`
      performance cost tractable despite its 12+ year retention.
-2. For each manual template row, look up its `(report_type,
+2. For each manual template row, look up its `(report_source,
    description[, owner])` in the merged index:
    - Found in **either** source, within `--years` of today → **not** a
      candidate (active). Two independent sources checked, active in
@@ -200,7 +200,7 @@ execution, not a proxy, so the original calibration stands.
     subset, field extraction. Owns the incremental cache for this source
     specifically, since it's the one actually worth caching.
   - `activity_index.py` — merges both sources into one lookup ("is
-    `(report_type, description[, owner])` active within N years"),
+    `(report_source, description[, owner])` active within N years"),
     persists the combined cache. `templates.py` depends on this
     interface only, not on log-parsing internals — keeps it reusable for
     the still-parked scheduled-report-removal category later.

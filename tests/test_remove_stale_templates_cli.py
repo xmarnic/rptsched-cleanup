@@ -14,12 +14,12 @@ STALE_LINE = "wxyz|noverdue|Stale Template|n|200207021051|202001010000|SOMEMGR||
 ACTIVE_LINE = "abcd|noverdue|Active Template|n|200207021051|202001010000|SOMEMGR||||||0|3||0|$<library_notice:c>|ENGLISH|"
 
 
-def _make_log_dirs(tmp, active_report_types_and_descriptions=()):
+def _make_log_dirs(tmp, active_report_sources_and_descriptions=()):
     """
     Build --logs-report-dir/--logs-hist-dir, with a Logs/Report/
     "Finished report" line (timestamped "now", so it's always within the
     default 3yr window regardless of when tests run) for each
-    (report_type, description) pair that should read as active.
+    (report_source, description) pair that should read as active.
 
     Always creates at least an empty placeholder file in each directory
     -- remove_stale_templates.py refuses to run against a log directory
@@ -36,8 +36,8 @@ def _make_log_dirs(tmp, active_report_types_and_descriptions=()):
     now = datetime.now()
     month_file = report_dir / (now.strftime("%Y%m") + ".log")
     with month_file.open("w") as f:
-        for report_type, description in active_report_types_and_descriptions:
-            f.write('{} Finished report {}:"{}"\n'.format(now.strftime("%Y%m%d%H%M%S"), report_type, description))
+        for report_source, description in active_report_sources_and_descriptions:
+            f.write('{} Finished report {}:"{}"\n'.format(now.strftime("%Y%m%d%H%M%S"), report_source, description))
     (hist_dir / (now.strftime("%Y%m") + ".hist")).touch()
 
     return report_dir, hist_dir

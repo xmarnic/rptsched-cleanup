@@ -64,7 +64,7 @@ class TestFindLogFiles(unittest.TestCase):
 
 
 class TestScanReportLogs(unittest.TestCase):
-    def test_builds_index_keyed_by_report_type_and_description(self):
+    def test_builds_index_keyed_by_report_source_and_description(self):
         with TemporaryDirectory() as tmp:
             logs_dir = Path(tmp)
             (logs_dir / "202608.log").write_text(

@@ -120,12 +120,12 @@ now mainly exists to nail down timing precision (does `created` match the
 scheduled time exactly, or the time it was *set up*?) rather than to
 re-confirm the row appears at all.
 
-### Trial 3 — Repeat Trial 2 on a non-batch-load report type
+### Trial 3 — Repeat Trial 2 on a non-batch-load report source
 
-Pick a template whose `report_type` is *not* `TS2bibload`/`TS2orderload`
+Pick a template whose `report_source` is *not* `TS2bibload`/`TS2orderload`
 (e.g., an `itemlist` or `bibliography` template). Schedule a one-time run
 on it. Determines whether "run once" spawning a new `"o"` row is general
-to all report types, or specific to the batch-load family — this matters
+to all report sources, or specific to the batch-load family — this matters
 for how broadly any resulting cleanup-logic change should apply.
 
 ### Trial 4 — Schedule a one-time run on the same template twice, separate sessions
@@ -174,7 +174,7 @@ this cluster too.
   If real usage of a report family shows up as new `"o"`-flagged rows
   under fresh IDs rather than updates to a long-lived template, then
   evaluating `qmod`/`efwj` in isolation is the wrong question — the right
-  question is whether *any* row sharing the same `report_type`/`owner`/
+  question is whether *any* row sharing the same `report_source`/`owner`/
   `description` cluster shows recent activity.
 - **Confirmed (Trial 1): a genuine no-trace action exists.** Ad hoc "Run
   Now" — the ordinary way staff would actually use a saved template day
@@ -182,8 +182,8 @@ this cluster too.
   metadata-based method. No amount of refining the signal (which file,
   which field, which threshold) closes this gap, because there's nothing
   to detect. The honest mitigation is the same one already used for ACQ:
-  exclude known-risky `report_type`/owner combinations from automated
-  removal via `--exclude-owner-regex` (or a new `--exclude-report-type`
+  exclude known-risky `report_source`/owner combinations from automated
+  removal via `--exclude-owner-regex` (or a new `--exclude-report-source`
   if this turns out to be common), rather than trying to perfect
   detection for a case that structurally can't be detected. This is
   likely the real, confirmed explanation for the production tickets:

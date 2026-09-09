@@ -88,7 +88,7 @@ def decode(raw_lines):
 
 HistLogEntry = namedtuple(
     "HistLogEntry",
-    ["command", "timestamp", "schedule_id", "report_type", "description", "owner", "frequency"],
+    ["command", "timestamp", "schedule_id", "report_source", "description", "owner", "frequency"],
 )
 
 HEADER_PATTERN = re.compile(
@@ -97,7 +97,7 @@ HEADER_PATTERN = re.compile(
 TIMESTAMP_FORMAT = "%m/%d/%Y,%H:%M:%S"
 
 # Only these two carry real usage evidence. Modify/Remove Scheduled
-# Report carry no report_type/description at all (verified against real
+# Report carry no report_source/description at all (verified against real
 # decoded output); Rename only links a schedule to its own prior
 # generation, not back to the manual template that spawned it (see the
 # roadmap doc's command vocabulary table).
@@ -154,7 +154,7 @@ def _parse_block(lines):
         command=command,
         timestamp=datetime.strptime(date_str + "," + time_str, TIMESTAMP_FORMAT),
         schedule_id=fields.get("schedule id"),
-        report_type=fields.get("name of run script"),
+        report_source=fields.get("name of run script"),
         description=fields.get("scheduled report name"),
         owner=owner,
         frequency=fields.get("frequency that the report will run"),
@@ -187,7 +187,7 @@ def scan_hist_logs(logs_hist_dir, since=None):
     """
     Scan Logs/Hist/*.hist and *.hist.Z for Create Scheduled Report and
     Remove Finished Report activity. Returns
-    {(report_type, description, owner): most_recent_timestamp}, limited
+    {(report_source, description, owner): most_recent_timestamp}, limited
     to entries at or after `since` when given.
     """
     index = {}
@@ -197,9 +197,9 @@ def scan_hist_logs(logs_hist_dir, since=None):
         for entry in parse_decoded_records(decoded_text):
             if since is not None and entry.timestamp < since:
                 continue
-            if entry.report_type is None or entry.description is None:
+            if entry.report_source is None or entry.description is None:
                 continue
-            key = (entry.report_type, entry.description, entry.owner)
+            key = (entry.report_source, entry.description, entry.owner)
             if key not in index or entry.timestamp > index[key]:
                 index[key] = entry.timestamp
     return index

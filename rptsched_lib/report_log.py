@@ -9,15 +9,15 @@ TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 
 def parse_line(line):
     """
-    Parse one Logs/Report/ line. Returns (report_type, description,
+    Parse one Logs/Report/ line. Returns (report_source, description,
     timestamp) for a "Finished report" line, or None for anything else
     (Starting/Adding/mailing lines, Missing parameter file lines, etc.)
     """
     match = FINISHED_REPORT_PATTERN.match(line)
     if not match:
         return None
-    timestamp_str, report_type, description = match.groups()
-    return report_type, description, datetime.strptime(timestamp_str, TIMESTAMP_FORMAT)
+    timestamp_str, report_source, description = match.groups()
+    return report_source, description, datetime.strptime(timestamp_str, TIMESTAMP_FORMAT)
 
 
 def _read_lines(log_path: Path):
@@ -62,15 +62,15 @@ def find_log_files(logs_report_dir, since=None):
 def scan_report_logs(logs_report_dir, since=None):
     """
     Scan Logs/Report/*.log and *.log.Z for "Finished report" lines.
-    Returns {(report_type, description): most_recent_timestamp}, limited
+    Returns {(report_source, description): most_recent_timestamp}, limited
     to entries at or after `since` when given.
     """
     index = {}
     for log_path in find_log_files(logs_report_dir, since=since):
-        for report_type, description, timestamp in iter_log_entries(log_path):
+        for report_source, description, timestamp in iter_log_entries(log_path):
             if since is not None and timestamp < since:
                 continue
-            key = (report_type, description)
+            key = (report_source, description)
             if key not in index or timestamp > index[key]:
                 index[key] = timestamp
     return index

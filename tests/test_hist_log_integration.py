@@ -70,7 +70,7 @@ class TestParseDecodedRecordsAgainstRealDecodedSample(unittest.TestCase):
 
         entries = parse_decoded_records(text)
 
-        self.assertTrue(all(e.report_type is not None for e in entries))
+        self.assertTrue(all(e.report_source is not None for e in entries))
         self.assertTrue(all(e.description is not None for e in entries))
         self.assertTrue(all(e.owner is not None for e in entries))
 
@@ -83,7 +83,7 @@ class TestParseDecodedRecordsAgainstRealDecodedSample(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         entry = matches[0]
         self.assertEqual(entry.command, "Remove Finished Report")
-        self.assertEqual(entry.report_type, "statistics")
+        self.assertEqual(entry.report_source, "statistics")
         self.assertEqual(entry.description, "NIOB daily Statistics")
         self.assertEqual(entry.owner, "NIOBBIBMGR")
         self.assertEqual(entry.timestamp, datetime(2026, 8, 31, 8, 7, 15))

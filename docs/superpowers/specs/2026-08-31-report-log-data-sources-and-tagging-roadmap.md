@@ -22,9 +22,9 @@ back to **January 2021** (5+ years retained as of 2026-08-31).
 
 Confirmed format, stable from at least August 2025 through today:
 ```
-YYYYMMDDHHMMSS Starting report <report_type>:"<description>"
-YYYYMMDDHHMMSS Adding report <report_type>:<description> to finished list
-YYYYMMDDHHMMSS Finished report <report_type>:"<description>"
+YYYYMMDDHHMMSS Starting report <report_source>:"<description>"
+YYYYMMDDHHMMSS Adding report <report_source>:<description> to finished list
+YYYYMMDDHHMMSS Finished report <report_source>:"<description>"
 ```
 Plus, when a report auto-mails its output:
 ```
@@ -38,7 +38,7 @@ Confirmed via direct testing to record **every** execution type we tried
 actual recurring-schedule fires — with no exceptions found. This is the
 one data source proven to close the gap left by `schedlist`'s `last_run`.
 
-**Known limitation**: keyed by `(report_type, description)`, no
+**Known limitation**: keyed by `(report_source, description)`, no
 per-entry id/user/session field. See the redesign spec for the
 85%/15% unambiguous/ambiguous breakdown this produces.
 
@@ -83,8 +83,8 @@ Path: `/software/WYLD/Unicorn/Rptprint/`. Per-execution files named by a
 short id distinct from the `schedlist` id — a fresh id is minted per
 actual print/report job, not reused from the template (e.g. `kdlu`'s
 weekly fire, a `schedlist` row, showed up here as job id `gzjw`). Each
-job gets an `<id>.log` (execution record — report type, description,
-precise timestamp, and for at least one report type, the underlying SQL
+job gets an `<id>.log` (execution record — report source, description,
+precise timestamp, and for at least one report source, the underlying SQL
 and row counts) and an `<id>.prn` (print-ready rendered output — empty
 for jobs with no configured print/notice delivery, as expected; not
 useful for detection). There are also `rpt<letter><random>`-named files
@@ -94,13 +94,13 @@ lower priority, likely in-flight job temp files.
 The real find is **`printlist`**, a flat pipe-delimited index — one line
 per job:
 ```
-id|description|timestamp|status|owner|report_type|0|||
+id|description|timestamp|status|owner|report_source|0|||
 gdvo|COKE List Users with Bills|202608170534|OK|COKEILL|billuser|0|||
 ```
 **Confirmed the `owner` field is the real template owner** — all six of
 our own test jobs show `owner=NMARLIN`, matching `kdkx`'s actual
 `schedlist` owner exactly. That means `printlist` supports joining on
-`(report_type, description, owner)` — a combination that resolves
+`(report_source, description, owner)` — a combination that resolves
 almost all of the ambiguous cases `Logs/Report/` can't (most of the 220
 shared-description groups are one-template-per-*different*-owner, which
 owner alone disambiguates).
@@ -121,7 +121,7 @@ the primary 3-year signal — too short-lived — but it's a much cleaner
 archiving `printlist` going forward** (a small periodic job appending new
 rows to our own persistent copy before they roll off the ~2-week window),
 so from today onward we accumulate real, zero-ambiguity
-`(report_type, description, owner)` history — while still relying on
+`(report_source, description, owner)` history — while still relying on
 `Logs/Report/`'s existing 5 years for anything historical. This is a
 "today" action (cheap, additive, doesn't touch any live template) worth
 doing well before the id-tagging feature is built, since every day not
@@ -147,7 +147,7 @@ correlation against our own test actions:
 | Raw code | Decoded meaning |
 |---|---|
 | `^oa` | schedule id (the `schedlist` id) |
-| `^ob` | report_type ("name of run script") |
+| `^ob` | report_source ("name of run script") |
 | `^oc` | description ("scheduled report name") |
 | `^od` | frequency |
 | `^oe` | next-scheduled-run date |
@@ -162,9 +162,9 @@ correlation against our own test actions:
 |---|---:|---|
 | `Set Report Options` | 778 | Per-tab dialog navigation noise (title/footer/seluser/... as a user clicks through the setup screen). Not useful alone. |
 | `Search Order Part B` | 139 | **False positive** — an unrelated acquisitions/order-search command that happens to reuse the literal `"schedule id:"` field label. Any implementation must filter by known command name, not just co-occurring text, or it pulls in ACQ noise. |
-| `Create Scheduled Report` | 69 | The commit/save event. Carries frequency, owner, id, report_type, description — including the newly-discovered **`frequency:"a"` = ad hoc**, confirmed via our own test (`kdlg`/`kdll`/`kdln`/`kdlv`, one spawned per ad hoc action). This never persists to `schedlist` at all, but *is* logged here with full attribution — the direct answer to "can we detect ad hoc Run Now," which no `rptsched/`-internal signal could. |
-| `Remove Finished Report` | 60 | Fires when a user dismisses a completed report from their Finished Reports list. Carries `schedule id`, report_type, description, and **`login of the owner of the report`** (the authoritative owner field, distinct from the acting user in `^FW`). Strong positive evidence of a genuinely completed+reviewed execution — but conditional: auto-delivered reports may never generate this event, so its *absence* proves nothing. A corroborator layered on `Logs/Report/`'s unconditional `Finished report` line, not a replacement for it. |
-| `Rename Scheduled Report` | 11 | Editing an *already-scheduled* entry; carries an `oS:<old_id>` field linking to what it replaced (e.g. a real production example: `oS:gqwq` → `kdqb`). **Correction to an earlier hypothesis from mid-investigation**: this link only appears on `Rename`, connecting a schedule to its own previous generation — it does **not** appear on fresh `Create Scheduled Report`, so it does not link a spawned schedule back to the original manual template that configured it. Description/report_type(+owner) matching is still required for that connection. |
+| `Create Scheduled Report` | 69 | The commit/save event. Carries frequency, owner, id, report_source, description — including the newly-discovered **`frequency:"a"` = ad hoc**, confirmed via our own test (`kdlg`/`kdll`/`kdln`/`kdlv`, one spawned per ad hoc action). This never persists to `schedlist` at all, but *is* logged here with full attribution — the direct answer to "can we detect ad hoc Run Now," which no `rptsched/`-internal signal could. |
+| `Remove Finished Report` | 60 | Fires when a user dismisses a completed report from their Finished Reports list. Carries `schedule id`, report_source, description, and **`login of the owner of the report`** (the authoritative owner field, distinct from the acting user in `^FW`). Strong positive evidence of a genuinely completed+reviewed execution — but conditional: auto-delivered reports may never generate this event, so its *absence* proves nothing. A corroborator layered on `Logs/Report/`'s unconditional `Finished report` line, not a replacement for it. |
+| `Rename Scheduled Report` | 11 | Editing an *already-scheduled* entry; carries an `oS:<old_id>` field linking to what it replaced (e.g. a real production example: `oS:gqwq` → `kdqb`). **Correction to an earlier hypothesis from mid-investigation**: this link only appears on `Rename`, connecting a schedule to its own previous generation — it does **not** appear on fresh `Create Scheduled Report`, so it does not link a spawned schedule back to the original manual template that configured it. Description/report_source(+owner) matching is still required for that connection. |
 | `Remove Scheduled Report` | 9 | Deletion of a schedule entry. Simple — just the id. |
 | `Modify Scheduled Report` | 5 | Confirms `suspend status:Y` is real and logged — directly relevant to (though out of scope for) the still-parked scheduled-report-removal category in `rptsched-domain-reference.md`. Also shows ownership reassignment via the same `login of the owner of the report` field. |
 | `Process Answers File` | 1 | Too rare in this sample to characterize; not investigated further. |
@@ -224,7 +224,7 @@ Modify / Remove Scheduled / Remove Finished / Rename) directly in raw text, and
 is *more* precise than the `^oa` pre-filter below, since it can't pick
 up `Search Order Part B`'s raw lines the way a marker shared across
 command types can. Decoding (`logprint | translate`) is still needed
-after this filter, but only to extract field *values* (id, report_type,
+after this filter, but only to extract field *values* (id, report_source,
 description, owner) from the already-classified subset — not to decide
 which lines matter in the first place.
 
@@ -248,7 +248,7 @@ Earlier framing in this doc treated id-tagging as *the* fix for the 15%
 ambiguous case found in `Logs/Report/` alone. That's now superseded:
 `Logs/Hist/`'s `login of the owner of the report` field (on `Create`,
 `Rename`, and `Remove Finished Report` events) means
-`(report_type, description, owner)` is achievable **today**, using
+`(report_source, description, owner)` is achievable **today**, using
 history that already exists going back over a decade — no renaming
 campaign required first. Owner alone resolves nearly all of the 220
 shared-description groups, since the dominant real-world case is one
@@ -281,7 +281,7 @@ lifetime (per the domain reference, it's "the join key across all of
 this"). Once tagged, every future `Logs/Report/` line for that template
 carries its own id inside the description text — a parser can extract
 the id via a simple pattern match and get a perfect join, regardless of
-how many other templates share the same `report_type` or the rest of the
+how many other templates share the same `report_source` or the rest of the
 description. This closes the ambiguity gap to zero, not just to 85%.
 
 Combining both (id **and** owner/library code) is reasonable — the id
@@ -333,9 +333,9 @@ Pulling everything above into one concrete algorithm:
    Bounding the window to what the rule actually needs is what makes the
    `Logs/Hist/` performance question tractable at all; nothing here
    requires processing more than 36 months of either log.
-3. Within that window, pull `(report_type, description)` activity from
+3. Within that window, pull `(report_source, description)` activity from
    `Logs/Report/` (fast, simple, unconditional, no owner) and
-   `(report_type, description, owner)` activity from `Logs/Hist/`
+   `(report_source, description, owner)` activity from `Logs/Hist/`
    (`Create`/`Rename Scheduled Report` and `Remove Finished Report`
    events specifically — owner-attributed, and the only source that
    captures ad hoc (`"a"`) usage at all).
@@ -359,7 +359,7 @@ implementation starts (not done in this pass; flagged, not fixed here).
 
 **Today, no changes needed:**
 - Deploy the finalized method above for the large majority of manual
-  templates — `(report_type, description, owner)` via `Logs/Hist/`
+  templates — `(report_source, description, owner)` via `Logs/Hist/`
   already resolves nearly all of what used to be the ambiguous 15%,
   using history that already exists (12+ years retained). Nothing to
   wait for.

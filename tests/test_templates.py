@@ -10,9 +10,9 @@ TODAY = datetime(2026, 7, 24)
 EMPTY_INDEX = ActivityIndex(report_index={}, hist_index={})
 
 
-def _line(template_id, frequency_flag="n", created="200207021051", last_run="200507270844", owner="SOMEMGR", description="Some Template", report_type="noverdue"):
+def _line(template_id, frequency_flag="n", created="200207021051", last_run="200507270844", owner="SOMEMGR", description="Some Template", report_source="noverdue"):
     return "{}|{}|{}|{}|{}|{}|{}||||||0|3||0|$<library_notice:c>|ENGLISH|".format(
-        template_id, report_type, description, frequency_flag, created, last_run, owner
+        template_id, report_source, description, frequency_flag, created, last_run, owner
     )
 
 
@@ -28,7 +28,7 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
             candidate = candidates["abcd"]
             self.assertEqual(candidate.filenames, ["abcd.selans", "abcd.set"])
             self.assertEqual(candidate.frequency_flag, "n")
-            self.assertEqual(candidate.report_type, "noverdue")
+            self.assertEqual(candidate.report_source, "noverdue")
 
     def test_no_activity_but_recently_created_is_protected_by_recency_floor(self):
         with TemporaryDirectory() as tmp:
@@ -112,7 +112,7 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
 
     def test_report_index_match_excludes_regardless_of_owner(self):
         with TemporaryDirectory() as tmp:
-            lines = [_line("abcd", report_type="noverdue", description="Some Template", owner="SOMEMGR")]
+            lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]
             data_dir = make_data_dir(tmp, lines, ["abcd.set"])
             index = ActivityIndex(
                 report_index={("noverdue", "Some Template"): datetime(2026, 6, 1)},
@@ -125,7 +125,7 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
 
     def test_hist_index_match_requires_owner_to_match(self):
         with TemporaryDirectory() as tmp:
-            lines = [_line("abcd", report_type="noverdue", description="Some Template", owner="SOMEMGR")]
+            lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]
             data_dir = make_data_dir(tmp, lines, ["abcd.set"])
             # hist activity recorded under a different owner -> shouldn't protect this row
             index = ActivityIndex(
@@ -139,7 +139,7 @@ class TestFindStaleTemplateCandidates(unittest.TestCase):
 
     def test_hist_index_match_with_correct_owner_excludes(self):
         with TemporaryDirectory() as tmp:
-            lines = [_line("abcd", report_type="noverdue", description="Some Template", owner="SOMEMGR")]
+            lines = [_line("abcd", report_source="noverdue", description="Some Template", owner="SOMEMGR")]
             data_dir = make_data_dir(tmp, lines, ["abcd.set"])
             index = ActivityIndex(
                 report_index={},

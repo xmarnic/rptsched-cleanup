@@ -125,7 +125,7 @@ class TestParseDecodedRecords(unittest.TestCase):
         self.assertEqual(entry.command, "Create Scheduled Report")
         self.assertEqual(entry.timestamp, datetime(2026, 8, 31, 8, 0, 0))
         self.assertEqual(entry.schedule_id, "kdih")
-        self.assertEqual(entry.report_type, "illholdlist")
+        self.assertEqual(entry.report_source, "illholdlist")
         self.assertEqual(entry.description, "ILL holds - My patrons unfilled CAMP")
         self.assertEqual(entry.owner, "CAMPBIBMGR")  # falls back to acting user
         self.assertEqual(entry.frequency, "a")
@@ -161,7 +161,7 @@ class TestParseDecodedRecords(unittest.TestCase):
         self.assertEqual(len(entries), 1)
         entry = entries[0]
         self.assertEqual(entry.command, "Remove Finished Report")
-        self.assertEqual(entry.report_type, "statistics")
+        self.assertEqual(entry.report_source, "statistics")
         self.assertEqual(entry.description, "NIOB daily Statistics")
         self.assertEqual(entry.owner, "NIOBBIBMGR")
         self.assertIsNone(entry.frequency)  # not carried on this command
@@ -227,7 +227,7 @@ class TestParseDecodedRecords(unittest.TestCase):
         entries = parse_decoded_records(text)
 
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0].report_type, "chargeitem")
+        self.assertEqual(entries[0].report_source, "chargeitem")
         self.assertEqual(entries[0].description, "Long Report Name Here")
 
 

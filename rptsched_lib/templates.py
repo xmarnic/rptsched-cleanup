@@ -10,7 +10,7 @@ DATETIME_FORMAT = "%Y%m%d%H%M"
 
 TemplateCandidate = namedtuple(
     "TemplateCandidate",
-    ["id", "raw_line", "report_type", "description", "owner", "frequency_flag", "created", "last_run", "filenames"],
+    ["id", "raw_line", "report_source", "description", "owner", "frequency_flag", "created", "last_run", "filenames"],
 )
 
 
@@ -79,7 +79,7 @@ def find_stale_template_candidates(data_dir, activity_index, years=3, today=None
                 continue
 
             fields = raw_line.split("|")
-            template_id, report_type, description, frequency_flag, created, last_run, owner = (
+            template_id, report_source, description, frequency_flag, created, last_run, owner = (
                 fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6]
             )
 
@@ -87,7 +87,7 @@ def find_stale_template_candidates(data_dir, activity_index, years=3, today=None
                 continue
             if _is_excluded_owner(owner, exclude_owners, compiled_regexes):
                 continue
-            if is_active(activity_index, report_type, description, owner):
+            if is_active(activity_index, report_source, description, owner):
                 continue
             if _created_within_window(created, threshold):
                 continue
@@ -95,7 +95,7 @@ def find_stale_template_candidates(data_dir, activity_index, years=3, today=None
             candidates[template_id] = TemplateCandidate(
                 id=template_id,
                 raw_line=raw_line,
-                report_type=report_type,
+                report_source=report_source,
                 description=description,
                 owner=owner,
                 frequency_flag=frequency_flag,

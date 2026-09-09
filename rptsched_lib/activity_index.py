@@ -18,18 +18,18 @@ ActivityIndex = namedtuple("ActivityIndex", ["report_index", "hist_index"])
 EMPTY_CACHE = {"report_log": {}, "hist_log": {}}
 
 
-def is_active(index, report_type, description, owner):
+def is_active(index, report_source, description, owner):
     """
-    True if (report_type, description) shows activity in Logs/Report/
+    True if (report_source, description) shows activity in Logs/Report/
     (owner-blind -- this is also what gives every template sharing a
-    join key group-level protection for free) or (report_type,
+    join key group-level protection for free) or (report_source,
     description, owner) shows activity in Logs/Hist/. Both indices are
     already windowed to the requested --years at build time, so
     presence alone means "active within the window."
     """
-    if (report_type, description) in index.report_index:
+    if (report_source, description) in index.report_index:
         return True
-    if (report_type, description, owner) in index.hist_index:
+    if (report_source, description, owner) in index.hist_index:
         return True
     return False
 
@@ -83,7 +83,7 @@ def _cached_hist_file_entries(hist_path: Path, cache):
                 command=row[0],
                 timestamp=datetime.strptime(row[1], ISO_FORMAT),
                 schedule_id=row[2],
-                report_type=row[3],
+                report_source=row[3],
                 description=row[4],
                 owner=row[5],
                 frequency=row[6],
@@ -97,7 +97,7 @@ def _cached_hist_file_entries(hist_path: Path, cache):
     cache["hist_log"][key] = {
         "mtime": mtime,
         "entries": [
-            [e.command, e.timestamp.strftime(ISO_FORMAT), e.schedule_id, e.report_type, e.description, e.owner, e.frequency]
+            [e.command, e.timestamp.strftime(ISO_FORMAT), e.schedule_id, e.report_source, e.description, e.owner, e.frequency]
             for e in entries
         ],
     }
@@ -120,9 +120,9 @@ def _build_hist_index_cached(logs_hist_dir, since, cache):
     index = {}
     for hist_path in hist_log.find_hist_files(logs_hist_dir, since=since):
         for entry in _cached_hist_file_entries(hist_path, cache):
-            if entry.timestamp < since or entry.report_type is None or entry.description is None:
+            if entry.timestamp < since or entry.report_source is None or entry.description is None:
                 continue
-            key = (entry.report_type, entry.description, entry.owner)
+            key = (entry.report_source, entry.description, entry.owner)
             if key not in index or entry.timestamp > index[key]:
                 index[key] = entry.timestamp
     return index

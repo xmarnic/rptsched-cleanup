@@ -52,8 +52,8 @@ recurring Symphony schedule.
 is not excluded by any \fB\-\-exclude\-owner\fR or
 \fB\-\-exclude\-owner\-regex\fR entry passed on the command line.
 .IP \(bu 2
-Its \fB(report_type, description)\fR pair shows no activity in
-\fILogs/Report/\fR within \fB\-\-years\fR, \fBand\fR its \fB(report_type,
+Its \fB(report_source, description)\fR pair shows no activity in
+\fILogs/Report/\fR within \fB\-\-years\fR, \fBand\fR its \fB(report_source,
 description, owner)\fR triple shows no activity in \fILogs/Hist/\fR
 within \fB\-\-years\fR either. A match in \fIeither\fR source protects
 the template \- this is deliberate defense in depth given the category's
@@ -130,7 +130,7 @@ re\-insert their removed \fIschedlist\fR lines. Mutually exclusive with
 Prints the count of stale\-template candidates, the total count of manual
 templates in \fIschedlist\fR (regardless of staleness or owner exclusion),
 and total files, then one line per candidate: id, description,
-report_type, owner, frequency_flag, created, and its file list.
+report_source, owner, frequency_flag, created, and its file list.
 \fBlast_run\fR is deliberately not shown \- it plays no part in the
 decision and displaying it invites the exact misreading that caused the
 original production incident. Nothing on disk is touched, including the

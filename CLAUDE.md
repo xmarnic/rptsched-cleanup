@@ -130,7 +130,7 @@ signal here than it is for manual templates. Ideas to revisit when this
 category comes up again, not acted on yet:
 
 - Since new BI software has taken over for most list/stats use cases,
-  scheduled reports whose `report_type` is a plain list or statistics
+  scheduled reports whose `report_source` is a plain list or statistics
   report may be reasonable candidates even if not otherwise flagged by
   the inactivity rule — usage may have shifted to the BI tool without the
   old schedule ever being turned off.
